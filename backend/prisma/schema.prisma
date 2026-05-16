@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id              String   @id @default(uuid())
+  fullName        String
+  passportNumber  String   @unique
+  position        String?
+  department      String?
+  archivePhotoUrl String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  devices        Device[]
+  accessRequests AccessRequest[]
+
+  @@map("users")
+}
+
+model Device {
+  id           String   @id @default(uuid())
+  userId       String
+  deviceId     String   @unique
+  deviceName   String?
+  registeredAt DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessRequests AccessRequest[]
+
+  @@map("devices")
+}
+
+model AccessRequest {
+  id          String        @id @default(uuid())
+  userId      String
+  deviceId    String
+  code        String
+  selfieUrl   String?
+  requestType RequestType
+  status      RequestStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  processedAt DateTime?
+  processedBy String?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+
+  @@map("access_requests")
+}
+
+model Guard {
+  id        String    @id @default(uuid())
+  fullName  String
+  username  String    @unique
+  password  String
+  role      GuardRole @default(GUARD)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  @@map("guards")
+}
+
+model WorkScheduleSetting {
+  id        String  @id @default(uuid())
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  isWeekend Boolean @default(false)
+
+  @@unique([dayOfWeek])
+  @@map("work_schedule_settings")
+}
+
+model AccessLog {
+  id        String     @id @default(uuid())
+  userId    String?
+  requestId String?
+  guardId   String?
+  action    ActionType
+  timestamp DateTime   @default(now())
+  ip        String?
+  deviceInfo String?
+
+  @@map("access_logs")
+}
+
+enum GuardRole {
+  GUARD
+  ADMIN
+}
+
+enum RequestType {
+  IN
+  OUT
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ActionType {
+  PASS
+  REJECT
+  CREATE_REQUEST
+  LOGIN
+  LOGOUT
+}

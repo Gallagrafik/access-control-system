@@ -1,0 +1,26 @@
+[
+  {
+    "fullName": "Иванов Сергей Александрович",
+    "passportNumber": "4512 345678",
+    "position": "Ведущий разработчик",
+    "archivePhotoUrl": "https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив+Иванов"
+  },
+  {
+    "fullName": "Смирнова Ольга Петровна",
+    "passportNumber": "4512 987654",
+    "position": "Главный бухгалтер",
+    "archivePhotoUrl": "https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив+Смирнова"
+  },
+  {
+    "fullName": "Кузнецов Дмитрий Павлович",
+    "passportNumber": "4512 112233",
+    "position": "Менеджер по продажам",
+    "archivePhotoUrl": "https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив+Кузнецов"
+  },
+  {
+    "fullName": "Петрова Анна Сергеевна",
+    "passportNumber": "4512 556677",
+    "position": "Системный администратор",
+    "archivePhotoUrl": "https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив+Петрова"
+  }
+]

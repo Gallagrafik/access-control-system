@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: access-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: access_control
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: StrongPass2026!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: access-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: MinioPass2026!
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: D:/access-control-system/postgres_data
+      o: bind
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: D:/access-control-system/minio_data
+      o: bind
