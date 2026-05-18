@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/employee.dart';
 import 'home_screen.dart';
+import 'package:http/http.dart' as http;
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -37,48 +38,54 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   void _register() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final employees = await _loadEmployees();
-    final normalizedInput = _normalizePassport(_passportNumber);
+    setState(() {}); // Можно добавить переменную загрузки, если нужно
 
-    // Поиск сотрудника
-    final foundEmployee = employees.firstWhere(
-      (emp) =>
-          emp.fullName.toLowerCase().trim() == _fullName.toLowerCase().trim() &&
-          _normalizePassport(emp.passportNumber) == normalizedInput,
-      orElse: () => Employee(
-        fullName: '',
-        passportNumber: '',
-        position: '',
-        archivePhotoUrl: '',
-      ),
-    );
+    try {
+      // 1. Генерируем или получаем ID устройства (фиксируем для этого браузера)
+      final deviceId = 'device-id-chrome-employee'; 
+      final normalizedPassport = _normalizePassport(_passportNumber);
 
-    if (foundEmployee.fullName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Такого сотрудника нет в базе предприятия'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
+      // 2. Отправляем запрос на регистрацию/привязку устройства на бэкенд
+      // Примечание: В NestJS обычно создается эндпоинт для привязки девайса сотрудника
+      final response = await http.post(
+        Uri.parse('http://localhost:3000/api/users/register-device'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'fullName': _fullName.trim(),
+          'passportNumber': normalizedPassport,
+          'deviceId': deviceId,
+          'pin': _pin,
+        }),
       );
-      return;
+
+      // Если бэкенд успешно зарегистрировал/нашел связь устройства
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = json.decode(response.body);
+        
+        // Создаем объект сотрудника из ответа сервера
+        Employee.current = Employee.fromJson(responseData['user']);
+        Employee.pin = _pin;
+
+        // Сохраняем deviceId в коде (можно расширить модель Employee или класс)
+        // Для простоты передаем в следующее окно или храним статично
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Устройство успешно привязано! Регистрация завершена.'), backgroundColor: Colors.green),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        final errorMsg = json.decode(response.body)['message'] ?? 'Ошибка проверки данных';
+        throw Exception(errorMsg);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка регистрации: $e'), backgroundColor: Colors.red),
+      );
     }
-
-    // Успешная регистрация
-    Employee.current = foundEmployee;
-    Employee.pin = _pin;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Регистрация успешна!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
   }
 
   @override

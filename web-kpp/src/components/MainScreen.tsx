@@ -28,6 +28,24 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
   const [workStart, setWorkStart] = useState("09:00");
   const [workEnd, setWorkEnd] = useState("18:00");
 
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/access-request/active');
+        if (response.ok) {
+          const data = await response.json();
+          setRequests(data); // Подменяем фейковые данные на реальные из базы
+        }
+      } catch (e) {
+        console.error('Ошибка сети:', e);
+      }
+    };
+
+    fetchRequests();
+    const interval = setInterval(fetchRequests, 3000); // Опрос базы каждые 3 секунды
+    return () => clearInterval(interval);
+  }, []);
+
   // Загрузка расписания из БД
   useEffect(() => {
     const loadSchedule = async () => {
@@ -44,30 +62,45 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
     loadSchedule();
   }, []);
 
-  // Мок данных заявок
-  useEffect(() => {
-    const mockData: AccessRequest[] = [
-      { id: "1", code: "7842", fullName: userFullName, position: "Охранник", requestType: "IN", selfieUrl: "https://via.placeholder.com/400x500/4F46E5/FFFFFF?text=Селфи+IN", archivePhotoUrl: "https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив" },
-      { id: "2", code: "7842", fullName: userFullName, position: "Охранник", requestType: "OUT", selfieUrl: "https://via.placeholder.com/400x500/4F46E5/FFFFFF?text=Селфи+OUT", archivePhotoUrl: "https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив" },
-    ];
-    setRequests(mockData);
-  }, [userFullName]);
-
   const filteredRequests = requests.filter(req => searchCode === '' || req.code.startsWith(searchCode));
   const inRequests = filteredRequests.filter(r => r.requestType === 'IN');
   const outRequests = filteredRequests.filter(r => r.requestType === 'OUT');
 
-  const handlePass = (id: string, name: string) => {
+  const handlePass = async (id: string, name: string) => {
     if (confirm(`Пропустить ${name}?`)) {
-      alert(`✅ Пропущен: ${name}`);
-      setRequests(prev => prev.filter(r => r.id !== id));
+      try {
+        // Отправляем запрос на бэкенд для гашения заявки
+        await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'APPROVE' }),
+        });
+        
+        alert(`✅ Пропущен: ${name}`);
+        setRequests(prev => prev.filter(r => r.id !== id));
+      } catch (error) {
+        console.error('Ошибка отправки на сервер:', error);
+        alert('Ошибка связи с сервером');
+      }
     }
   };
 
-  const handleReject = (id: string, name: string) => {
+  const handleReject = async (id: string, name: string) => {
     if (confirm(`Задержать ${name}?`)) {
-      alert(`⛔ Задержан: ${name}`);
-      setRequests(prev => prev.filter(r => r.id !== id));
+      try {
+        // Отправляем запрос на бэкенд для отклонения
+        await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'REJECT' }),
+        });
+
+        alert(`🛑 Задержан: ${name}`);
+        setRequests(prev => prev.filter(r => r.id !== id));
+      } catch (error) {
+        console.error('Ошибка отправки на сервер:', error);
+        alert('Ошибка связи с сервером');
+      }
     }
   };
 

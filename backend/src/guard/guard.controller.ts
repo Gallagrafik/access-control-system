@@ -15,4 +15,11 @@ export class GuardController {
   async seedAdmin() {
     return this.guardService.seedAdmin();
   }
+  
+  // Метод для массовой загрузки сотрудников из JSON
+  @Post('seed-users')
+  async seedUsers() {
+    return this.guardService.seedUsers();
+  }
 }
+  

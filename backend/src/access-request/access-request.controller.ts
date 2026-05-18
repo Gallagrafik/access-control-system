@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseInterceptors, UploadedFile, Req, Param } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AccessRequestService } from './access-request.service';
 import { CreateAccessRequestDto } from './dto/create-access-request.dto';
@@ -15,5 +15,24 @@ export class AccessRequestController {
     @Req() req: any,
   ) {
     return this.accessRequestService.createRequest(createDto, selfie, req);
+  }
+
+  @Get('active')
+  async getActiveRequests() {
+    return this.accessRequestService.getActiveRequests();
+  }
+
+  // Получение активных заявок конкретного сотрудника по ID устройства
+  @Get('user/:deviceId')
+  async getUserRequests(@Param('deviceId') deviceId: string) {
+    return this.accessRequestService.getUserRequests(deviceId);
+  }
+
+  @Post('process/:id')
+  async processRequest(
+    @Param('id') id: string,
+    @Body() body: { action: 'APPROVE' | 'REJECT' },
+  ) {
+    return this.accessRequestService.processRequest(id, body.action);
   }
 }

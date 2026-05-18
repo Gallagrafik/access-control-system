@@ -28,6 +28,62 @@ export class AccessRequestService {
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
 
+    // Получение активных заявок со статусом PENDING
+  async getActiveRequests() {
+    return this.prisma.accessRequest.findMany({
+      where: {
+        status: 'PENDING',
+      },
+      include: {
+        user: true, // Обязательно подтягиваем данные сотрудника из таблицы users
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  // Изменение статуса заявки (гашение по кнопке "Пропустить")
+  async processRequest(id: string, action: 'APPROVE' | 'REJECT') {
+    const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    
+    // Обновляем статус заявки в PostgreSQL
+    const updatedRequest = await this.prisma.accessRequest.update({
+      where: { id },
+      data: { 
+        status: status,
+        processedAt: new Date(),
+        processedBy: 'admin', // ID залогиненного охранника
+      },
+    });
+
+    // Создаем запись в системный лог доступа по ТЗ
+    await this.prisma.accessLog.create({
+      data: {
+        requestId: id,
+        userId: updatedRequest.userId,
+        action: action === 'APPROVE' ? 'PASS' : 'REJECT',
+        guardId: 'admin',
+        timestamp: new Date(),
+      },
+    });
+
+    return { message: `Заявка успешно переведена в статус ${status}` };
+  }
+
+  // Поиск активных заявок сотрудника в PostgreSQL
+  async getUserRequests(deviceId: string) {
+    return this.prisma.accessRequest.findMany({
+      where: {
+        deviceId: deviceId,
+        status: 'PENDING', // Показываем только те, что еще не обработал охранник
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
   async createRequest(
     dto: CreateAccessRequestDto,
     selfie: Express.Multer.File | undefined,

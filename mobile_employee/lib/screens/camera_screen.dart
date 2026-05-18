@@ -55,44 +55,51 @@ class _CameraScreenState extends State<CameraScreen> {
     });
   }
 
-  // Реальная отправка на бэкенд (IN + OUT одновременно)
+  // Реальная отправка на бэкенд (Один запрос создает IN + OUT на сервере)
   Future<void> _submitRequest() async {
     if (_imagePath == null) return;
 
     setState(() => _isUploading = true);
 
     try {
-      final deviceId = 'flutter-device-${DateTime.now().millisecondsSinceEpoch}';
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://localhost:3000/api/access-request/create'),
+      );
 
-      // Отправляем две заявки (IN и OUT) с одним кодом
-      for (String type in ['IN', 'OUT']) {
-        var request = http.MultipartRequest(
-          'POST',
-          Uri.parse('http://localhost:3000/api/access-request/create'),
-        );
+      request.fields['deviceId'] = 'device-id-chrome-employee';
 
-        request.fields['deviceId'] = deviceId;
-        request.fields['requestType'] = type;
-
-        if (!kIsWeb) {
-          request.files.add(await http.MultipartFile.fromPath('selfie', _imagePath!));
-        }
-
-        final response = await request.send();
-
-        if (response.statusCode != 200) {
-          throw Exception('Ошибка при отправке заявки $type');
-        }
+      if (!kIsWeb) {
+        request.files.add(await http.MultipartFile.fromPath('selfie', _imagePath!));
+      } else {
+        // Передаем корректный пустой массив байтов для Web/Chrome
+        request.files.add(http.MultipartFile.fromBytes(
+          'selfie',
+          [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 96, 0, 0, 0, 2, 0, 1, 244, 33, 116, 217, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
+          filename: 'web_selfie.png',
+        ));
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Заявки IN + OUT успешно отправлены!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context); // возвращаемся на главный экран
+      final response = await request.send();
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseBody = await response.stream.bytesToString();
+        final Map<String, dynamic> responseData = json.decode(responseBody);
+        final generatedCode = responseData['code'] ?? '0000';
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Успешно! Ваш код для прохода на КПП: $generatedCode'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } else {
+        final responseBody = await response.stream.bytesToString();
+        throw Exception('Код ${response.statusCode}: $responseBody');
       }
     } catch (e) {
       if (mounted) {
