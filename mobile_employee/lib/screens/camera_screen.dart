@@ -3,8 +3,8 @@ import 'package:camera/camera.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import '../models/employee.dart';
 import 'dart:convert';
+import 'package:image/image.dart' as img;
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -34,10 +34,55 @@ class _CameraScreenState extends State<CameraScreen> {
     }
     cameras = await availableCameras();
     if (cameras != null && cameras!.isNotEmpty) {
-      _controller = CameraController(cameras![0], ResolutionPreset.high);
+      final frontCamera = cameras!.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras![0],
+      );
+      
+      _controller = CameraController(frontCamera, ResolutionPreset.high);
       await _controller!.initialize();
       setState(() => _isInitialized = true);
     }
+  }
+
+  // Обрезка файла строго по той области, которую пользователь видел на экране
+  Future<String> _cropImageTo3x4(String path) async {
+    final bytes = await File(path).readAsBytes();
+    img.Image? originalImage = img.decodeImage(bytes);
+    if (originalImage == null) return path;
+
+    // 1. Разворачиваем снимок по горизонтали (убираем инверсию), 
+    // чтобы он стал точно таким же «зеркальным», каким был экран при съёмке
+    originalImage = img.copyFlip(originalImage, direction: img.FlipDirection.horizontal);
+
+    int origWidth = originalImage.width;
+    int origHeight = originalImage.height;
+
+    // 2. Рассчитываем размеры под пропорцию 3:4 от ширины
+    int targetWidth = origWidth;
+    int targetHeight = (origWidth * 4) ~/ 3;
+
+    // Если высота кадра меньше целевой
+    if (origHeight < targetHeight) {
+      targetHeight = origHeight;
+      targetWidth = (origHeight * 3) ~/ 4;
+    }
+
+    // 3. Вырезаем строго ЦЕНТРАЛЬНУЮ область кадра
+    int x = (origWidth - targetWidth) ~/ 2;
+    int y = (origHeight - targetHeight) ~/ 2;
+
+    final img.Image croppedImage = img.copyCrop(
+      originalImage,
+      x: x,
+      y: y,
+      width: targetWidth,
+      height: targetHeight,
+    );
+
+    // 4. Перезаписываем файл
+    final croppedFile = await File(path).writeAsBytes(img.encodeJpg(croppedImage, quality: 90));
+    return croppedFile.path;
   }
 
   Future<void> _takePicture() async {
@@ -48,14 +93,19 @@ class _CameraScreenState extends State<CameraScreen> {
     if (_controller == null || !_controller!.value.isInitialized) return;
 
     setState(() => _isTakingPhoto = true);
-    final XFile photo = await _controller!.takePicture();
-    setState(() {
-      _imagePath = photo.path;
-      _isTakingPhoto = false;
-    });
+    try {
+      final XFile photo = await _controller!.takePicture();
+      final String croppedPath = await _cropImageTo3x4(photo.path);
+
+      setState(() {
+        _imagePath = croppedPath;
+        _isTakingPhoto = false;
+      });
+    } catch (e) {
+      setState(() => _isTakingPhoto = false);
+    }
   }
 
-  // Реальная отправка на бэкенд (Один запрос создает IN + OUT на сервере)
   Future<void> _submitRequest() async {
     if (_imagePath == null) return;
 
@@ -72,7 +122,6 @@ class _CameraScreenState extends State<CameraScreen> {
       if (!kIsWeb) {
         request.files.add(await http.MultipartFile.fromPath('selfie', _imagePath!));
       } else {
-        // Передаем корректный пустой массив байтов для Web/Chrome
         request.files.add(http.MultipartFile.fromBytes(
           'selfie',
           [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 96, 0, 0, 0, 2, 0, 1, 244, 33, 116, 217, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130],
@@ -148,55 +197,122 @@ class _CameraScreenState extends State<CameraScreen> {
       );
     }
 
-    // Реальная камера
-    return Scaffold(
-      appBar: AppBar(title: const Text('Съёмка селфи')),
-      body: Stack(
-        children: [
-          CameraPreview(_controller!),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cameraHeight = (screenWidth * 4) / 3; // Идеальная высота для формата 3:4
 
-          Positioned(
-            bottom: 40,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: FloatingActionButton.large(
-                onPressed: _isTakingPhoto ? null : _takePicture,
-                child: Icon(_isTakingPhoto ? Icons.hourglass_empty : Icons.camera, size: 40),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Основной контент: Камера сверху, управление снизу
+            Column(
+              children: [
+                // 1. Область камеры строго в формате 3:4 с защитой от растягивания (зеркало включено)
+                Container(
+                  width: screenWidth,
+                  height: cameraHeight,
+                  color: Colors.black,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.center, // Центрируем поток камеры на экране
+                      child: FittedBox(
+                        fit: BoxFit.cover, // Заполняем область без искажения пропорций
+                        child: SizedBox(
+                          width: _controller!.value.previewSize!.height,
+                          height: _controller!.value.previewSize!.width,
+                          child: CameraPreview(_controller!), // Обычное нативное превью
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // 2. Чёрная нижняя область для кнопки съёмки
+                Expanded(
+                  child: Container(
+                    color: Colors.black,
+                    child: Center(
+                      child: FloatingActionButton.large(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        onPressed: _isTakingPhoto ? null : _takePicture,
+                        child: Icon(_isTakingPhoto ? Icons.hourglass_empty : Icons.camera_alt, size: 40),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Иконка "Назад" поверх камеры в левом верхнем углу
+            Positioned(
+              top: 10,
+              left: 10,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                onPressed: () => Navigator.pop(context),
               ),
             ),
-          ),
 
-          if (_imagePath != null)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.95),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.file(File(_imagePath!), width: 280, height: 380, fit: BoxFit.cover),
-                    const SizedBox(height: 30),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElevatedButton(
-                          onPressed: () => setState(() => _imagePath = null),
-                          child: const Text('Переснять'),
+            // Экран предпросмотра (показывается после снимка)
+            if (_imagePath != null)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black,
+                  child: Column(
+                    children: [
+                      // Картинка 3:4 сверху
+                      Container(
+                        width: screenWidth,
+                        height: cameraHeight,
+                        color: Colors.black,
+                        child: Image.file(
+                          File(_imagePath!),
+                          fit: BoxFit.cover,
                         ),
-                        const SizedBox(width: 20),
-                        ElevatedButton(
-                          onPressed: _isUploading ? null : _submitRequest,
-                          child: _isUploading
-                              ? const CircularProgressIndicator(color: Colors.white)
-                              : const Text('Отправить заявку'),
+                      ),
+                      // Нижняя панель подтверждения
+                      Expanded(
+                        child: Container(
+                          color: Colors.black,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              OutlinedButton(
+                                onPressed: () => setState(() => _imagePath = null),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  side: const BorderSide(color: Colors.white24),
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                                ),
+                                child: const Text('Переснять'),
+                              ),
+                              const SizedBox(width: 30),
+                              ElevatedButton(
+                                onPressed: _isUploading ? null : _submitRequest,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.indigo,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                                ),
+                                child: _isUploading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                      )
+                                    : const Text('Отправить'),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
