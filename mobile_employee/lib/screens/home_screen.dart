@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:3000/api/access-request/user/$_deviceId'),
+        Uri.parse('http://192.168.0.101:3000/api/access-request/user/$_deviceId'),
       );
       if (response.statusCode == 200) {
         setState(() {

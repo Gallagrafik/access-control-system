@@ -7,11 +7,15 @@ import SettingsModal from './SettingsModal';
 interface AccessRequest {
   id: string;
   code: string;
-  fullName: string;
+  fullName?: string;
+  user?: {
+    fullName: string;
+    position?: string;
+  };
   position?: string;
   requestType: 'IN' | 'OUT';
   selfieUrl: string;
-  archivePhotoUrl: string;
+  archivePhotoUrl: string | null;
 }
 
 interface MainScreenProps {
@@ -28,13 +32,32 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
   const [workStart, setWorkStart] = useState("09:00");
   const [workEnd, setWorkEnd] = useState("18:00");
 
+  // === ИСПРАВЛЕНИЕ URL ===
+  const fixUrl = (url?: string | null): string => {
+    if (!url) return 'https://via.placeholder.com/400x500/4F46E5/FFFFFF?text=Селфи';
+    return url.replace('localhost', '192.168.0.101');
+  };
+
+  const processedRequests = requests.map(req => ({
+    ...req,
+    selfieUrl: fixUrl(req.selfieUrl),
+    archivePhotoUrl: fixUrl(req.archivePhotoUrl),
+  }));
+
+  const filteredRequests = processedRequests.filter(req => 
+    searchCode === '' || req.code.startsWith(searchCode)
+  );
+
+  const inRequests = filteredRequests.filter(r => r.requestType === 'IN');
+  const outRequests = filteredRequests.filter(r => r.requestType === 'OUT');
+
   useEffect(() => {
     const fetchRequests = async () => {
       try {
         const response = await fetch('http://localhost:3000/api/access-request/active');
         if (response.ok) {
           const data = await response.json();
-          setRequests(data); // Подменяем фейковые данные на реальные из базы
+          setRequests(data);
         }
       } catch (e) {
         console.error('Ошибка сети:', e);
@@ -42,11 +65,10 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
     };
 
     fetchRequests();
-    const interval = setInterval(fetchRequests, 3000); // Опрос базы каждые 3 секунды
+    const interval = setInterval(fetchRequests, 3000);
     return () => clearInterval(interval);
   }, []);
 
-  // Загрузка расписания из БД
   useEffect(() => {
     const loadSchedule = async () => {
       try {
@@ -62,55 +84,33 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
     loadSchedule();
   }, []);
 
-  const filteredRequests = requests.filter(req => searchCode === '' || req.code.startsWith(searchCode));
-  const inRequests = filteredRequests.filter(r => r.requestType === 'IN');
-  const outRequests = filteredRequests.filter(r => r.requestType === 'OUT');
-
   const handlePass = async (id: string, name: string) => {
-    if (confirm(`Пропустить ${name}?`)) {
-      try {
-        // Отправляем запрос на бэкенд для гашения заявки
-        await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'APPROVE' }),
-        });
-        
-        alert(`✅ Пропущен: ${name}`);
-        setRequests(prev => prev.filter(r => r.id !== id));
-      } catch (error) {
-        console.error('Ошибка отправки на сервер:', error);
-        alert('Ошибка связи с сервером');
-      }
+    try {
+      await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'APPROVE' }),
+      });
+      setRequests(prev => prev.filter(r => r.id !== id));
+    } catch (error) {
+      console.error('Ошибка:', error);
     }
   };
 
   const handleReject = async (id: string, name: string) => {
-    if (confirm(`Задержать ${name}?`)) {
-      try {
-        // Отправляем запрос на бэкенд для отклонения
-        await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'REJECT' }),
-        });
-
-        alert(`🛑 Задержан: ${name}`);
-        setRequests(prev => prev.filter(r => r.id !== id));
-      } catch (error) {
-        console.error('Ошибка отправки на сервер:', error);
-        alert('Ошибка связи с сервером');
-      }
+    try {
+      await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'REJECT' }),
+      });
+      setRequests(prev => prev.filter(r => r.id !== id));
+    } catch (error) {
+      console.error('Ошибка:', error);
     }
   };
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
-
-  const handleSaveSettings = (newStart: string, newEnd: string) => {
-    setWorkStart(newStart);
-    setWorkEnd(newEnd);
-    alert('Настройки рабочего дня сохранены');
-  };
 
   return (
     <div style={{ backgroundColor: isDarkMode ? '#09090b' : '#f8fafc', color: isDarkMode ? 'white' : '#0f172a', minHeight: '100vh', fontFamily: 'system-ui' }}>
@@ -134,17 +134,11 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
             {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
           </button>
 
-          <button 
-            onClick={() => setShowSettings(true)}
-            style={{ padding: '10px 18px', backgroundColor: '#27272a', border: '1px solid #eab308', borderRadius: '12px', color: 'white', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
+          <button onClick={() => setShowSettings(true)} style={{ padding: '10px 18px', backgroundColor: '#27272a', border: '1px solid #eab308', borderRadius: '12px', color: 'white', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Settings size={20} /> Настройки
           </button>
 
-          <button 
-            onClick={() => setShowProfile(true)}
-            style={{ padding: '10px 20px', backgroundColor: '#27272a', border: '1px solid #3b82f6', borderRadius: '12px', color: 'white', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
+          <button onClick={() => setShowProfile(true)} style={{ padding: '10px 20px', backgroundColor: '#27272a', border: '1px solid #3b82f6', borderRadius: '12px', color: 'white', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <UserCheck size={22} /> Профиль
           </button>
 
@@ -179,8 +173,12 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                     <div>
                       <div style={{ fontSize: '32px', fontFamily: 'monospace', color: '#10b981' }}>{req.code}</div>
-                      <h3 style={{ fontSize: '22px', margin: '8px 0 4px', color: isDarkMode ? 'white' : '#0f172a' }}>{req.fullName}</h3>
-                      <p style={{ color: isDarkMode ? '#a3a3a3' : '#64748b' }}>{req.position}</p>
+                      <h3 style={{ fontSize: '22px', margin: '8px 0 4px', color: isDarkMode ? 'white' : '#0f172a' }}>
+                        {req.user?.fullName || req.fullName || 'Неизвестный сотрудник'}
+                      </h3>
+                      <p style={{ color: isDarkMode ? '#a3a3a3' : '#64748b' }}>
+                        {req.user?.position || req.position || ''}
+                      </p>
                     </div>
                     <span style={{ color: '#10b981', fontSize: '20px' }}>ВХОД</span>
                   </div>
@@ -188,19 +186,29 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                     <div>
                       <div style={{ fontSize: '13px', color: '#a3a3a3', marginBottom: '6px' }}>Архив</div>
-                      <img src={req.archivePhotoUrl} style={{ width: '100%', borderRadius: '16px' }} />
+                      <img 
+                        src={req.archivePhotoUrl || 'https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив'} 
+                        style={{ width: '100%', borderRadius: '16px', backgroundColor: '#27272a' }} 
+                        onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив'}
+                      />
                     </div>
                     <div>
                       <div style={{ fontSize: '13px', color: '#a3a3a3', marginBottom: '6px' }}>Селфи</div>
-                      <img src={req.selfieUrl} style={{ width: '100%', borderRadius: '16px' }} />
+                      <img 
+                        src={req.selfieUrl} 
+                        style={{ width: '100%', borderRadius: '16px', backgroundColor: '#27272a' }} 
+                        onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/400x500/4F46E5/FFFFFF?text=Селфи+не+загружено'}
+                      />
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <button onClick={() => handlePass(req.id, req.fullName)} style={{ backgroundColor: '#10b981', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <button onClick={() => handlePass(req.id, req.user?.fullName || req.fullName || 'Сотрудник')} 
+                      style={{ backgroundColor: '#10b981', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                       <CheckCircle size={20} /> Пропустить
                     </button>
-                    <button onClick={() => handleReject(req.id, req.fullName)} style={{ backgroundColor: '#f43f5e', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <button onClick={() => handleReject(req.id, req.user?.fullName || req.fullName || 'Сотрудник')} 
+                      style={{ backgroundColor: '#f43f5e', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                       <XCircle size={20} /> Задержать
                     </button>
                   </div>
@@ -220,8 +228,12 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                     <div>
                       <div style={{ fontSize: '32px', fontFamily: 'monospace', color: '#f59e0b' }}>{req.code}</div>
-                      <h3 style={{ fontSize: '22px', margin: '8px 0 4px', color: isDarkMode ? 'white' : '#0f172a' }}>{req.fullName}</h3>
-                      <p style={{ color: isDarkMode ? '#a3a3a3' : '#64748b' }}>{req.position}</p>
+                      <h3 style={{ fontSize: '22px', margin: '8px 0 4px', color: isDarkMode ? 'white' : '#0f172a' }}>
+                        {req.user?.fullName || req.fullName || 'Неизвестный сотрудник'}
+                      </h3>
+                      <p style={{ color: isDarkMode ? '#a3a3a3' : '#64748b' }}>
+                        {req.user?.position || req.position || ''}
+                      </p>
                     </div>
                     <span style={{ color: '#f59e0b', fontSize: '20px' }}>ВЫХОД</span>
                   </div>
@@ -229,19 +241,29 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
                     <div>
                       <div style={{ fontSize: '13px', color: '#a3a3a3', marginBottom: '6px' }}>Архив</div>
-                      <img src={req.archivePhotoUrl} style={{ width: '100%', borderRadius: '16px' }} />
+                      <img 
+                        src={req.archivePhotoUrl || 'https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив'} 
+                        style={{ width: '100%', borderRadius: '16px', backgroundColor: '#27272a' }} 
+                        onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/400x500/1E40AF/FFFFFF?text=Архив'}
+                      />
                     </div>
                     <div>
                       <div style={{ fontSize: '13px', color: '#a3a3a3', marginBottom: '6px' }}>Селфи</div>
-                      <img src={req.selfieUrl} style={{ width: '100%', borderRadius: '16px' }} />
+                      <img 
+                        src={req.selfieUrl} 
+                        style={{ width: '100%', borderRadius: '16px', backgroundColor: '#27272a' }} 
+                        onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/400x500/4F46E5/FFFFFF?text=Селфи+не+загружено'}
+                      />
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <button onClick={() => handlePass(req.id, req.fullName)} style={{ backgroundColor: '#10b981', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <button onClick={() => handlePass(req.id, req.user?.fullName || req.fullName || 'Сотрудник')} 
+                      style={{ backgroundColor: '#10b981', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                       <CheckCircle size={20} /> Пропустить
                     </button>
-                    <button onClick={() => handleReject(req.id, req.fullName)} style={{ backgroundColor: '#f43f5e', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <button onClick={() => handleReject(req.id, req.user?.fullName || req.fullName || 'Сотрудник')} 
+                      style={{ backgroundColor: '#f43f5e', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                       <XCircle size={20} /> Задержать
                     </button>
                   </div>
@@ -252,7 +274,6 @@ function MainScreen({ userFullName, onLogout }: MainScreenProps) {
         </div>
       </div>
 
-      {/* Модальные окна */}
       {showProfile && <ProfileModal userFullName={userFullName} onClose={() => setShowProfile(false)} />}
       {showSettings && (
         <SettingsModal 

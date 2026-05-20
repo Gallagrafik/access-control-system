@@ -22,6 +22,23 @@ export class AccessRequestService {
       accessKey: this.configService.get<string>('MINIO_ACCESS_KEY')!,
       secretKey: this.configService.get<string>('MINIO_SECRET_KEY')!,
     });
+    // Автоматическая настройка публичного доступа на скачивание фото
+    const bucketName = this.configService.get<string>('MINIO_BUCKET') || 'access-photos';
+    const policy = {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Principal: '*',
+          Action: ['s3:GetObject'],
+          Resource: [`arn:aws:s3:::${bucketName}/*`],
+        },
+      ],
+    };
+
+    this.minioClient.setBucketPolicy(bucketName, JSON.stringify(policy))
+      .then(() => this.logger.log(`✅ Доступ к бакету ${bucketName} успешно открыт (PUBLIC)`))
+      .catch((err) => this.logger.error(`❌ Ошибка настройки прав бакета: ${err.message}`));
   }
 
   private generateCode(): string {
@@ -46,18 +63,44 @@ export class AccessRequestService {
   // Изменение статуса заявки (гашение по кнопке "Пропустить")
   async processRequest(id: string, action: 'APPROVE' | 'REJECT') {
     const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-    
-    // Обновляем статус заявки в PostgreSQL
+
+    // Находим текущую заявку
+    const currentRequest = await this.prisma.accessRequest.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!currentRequest) {
+      throw new BadRequestException('Заявка не найдена');
+    }
+
+    // Если отклоняем ВХОД — автоматически отклоняем и ВЫХОД с тем же кодом
+    if (action === 'REJECT' && currentRequest.requestType === 'IN') {
+      await this.prisma.accessRequest.updateMany({
+        where: {
+          code: currentRequest.code,
+          userId: currentRequest.userId,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'REJECTED',
+          processedAt: new Date(),
+          processedBy: 'admin',
+        },
+      });
+    }
+
+    // Обновляем текущую заявку
     const updatedRequest = await this.prisma.accessRequest.update({
       where: { id },
-      data: { 
+      data: {
         status: status,
         processedAt: new Date(),
-        processedBy: 'admin', // ID залогиненного охранника
+        processedBy: 'admin',
       },
     });
 
-    // Создаем запись в системный лог доступа по ТЗ
+    // Логируем действие
     await this.prisma.accessLog.create({
       data: {
         requestId: id,
@@ -68,7 +111,10 @@ export class AccessRequestService {
       },
     });
 
-    return { message: `Заявка успешно переведена в статус ${status}` };
+    return { 
+      message: `Заявка успешно переведена в статус ${status}`,
+      autoRejectedOut: action === 'REJECT' && currentRequest.requestType === 'IN'
+    };
   }
 
   // Поиск активных заявок сотрудника в PostgreSQL

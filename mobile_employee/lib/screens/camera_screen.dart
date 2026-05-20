@@ -64,7 +64,7 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://localhost:3000/api/access-request/create'),
+        Uri.parse('http://192.168.0.101:3000/api/access-request/create'),
       );
 
       request.fields['deviceId'] = 'device-id-chrome-employee';

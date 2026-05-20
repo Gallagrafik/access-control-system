@@ -48,7 +48,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       // 2. Отправляем запрос на регистрацию/привязку устройства на бэкенд
       // Примечание: В NestJS обычно создается эндпоинт для привязки девайса сотрудника
       final response = await http.post(
-        Uri.parse('http://localhost:3000/api/users/register-device'),
+        Uri.parse('http://192.168.0.101:3000/api/users/register-device'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'fullName': _fullName.trim(),
