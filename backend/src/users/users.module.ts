@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
-import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
+import { UsersService } from './users.service';
+import { PrismaModule } from '../prisma/prisma.module'; // Импортируем Prisma, чтобы была связь с PostgreSQL
 
 @Module({
-  providers: [UsersService],
-  controllers: [UsersController]
+  imports: [PrismaModule], // Добавляем сюда PrismaModule
+  controllers: [UsersController], // Регистрируем контроллер
+  providers: [UsersService], // Регистрируем сервис
 })
 export class UsersModule {}
