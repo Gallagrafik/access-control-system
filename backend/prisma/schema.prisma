@@ -69,11 +69,13 @@ model Guard {
 }
 
 model WorkScheduleSetting {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   dayOfWeek Int
   startTime String
   endTime   String
-  isWeekend Boolean @default(false)
+  isWeekend Boolean  @default(false)
+  requestExpiryHours Int? @default(8)  // Через сколько часов заявка становится просроченной
+  checkExpiredAt     DateTime?         // Время последней проверки
 
   @@unique([dayOfWeek])
   @@map("work_schedule_settings")
@@ -106,6 +108,7 @@ enum RequestStatus {
   PENDING
   APPROVED
   REJECTED
+  EXPIRED
 }
 
 enum ActionType {
@@ -114,4 +117,5 @@ enum ActionType {
   CREATE_REQUEST
   LOGIN
   LOGOUT
+  EXPIRE
 }

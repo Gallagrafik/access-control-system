@@ -12,13 +12,13 @@ export class SettingsService {
     if (count > 0) return;
 
     const defaultSchedule = [
-      { dayOfWeek: 1, startTime: "09:00", endTime: "18:00", isWeekend: false }, // Пн
-      { dayOfWeek: 2, startTime: "09:00", endTime: "18:00", isWeekend: false },
-      { dayOfWeek: 3, startTime: "09:00", endTime: "18:00", isWeekend: false },
-      { dayOfWeek: 4, startTime: "09:00", endTime: "18:00", isWeekend: false },
-      { dayOfWeek: 5, startTime: "09:00", endTime: "18:00", isWeekend: false }, // Пт
-      { dayOfWeek: 6, startTime: "10:00", endTime: "16:00", isWeekend: true },  // Сб
-      { dayOfWeek: 0, startTime: "10:00", endTime: "16:00", isWeekend: true },  // Вс
+      { dayOfWeek: 1, startTime: "09:00", endTime: "18:00", isWeekend: false, requestExpiryHours: 8 },
+      { dayOfWeek: 2, startTime: "09:00", endTime: "18:00", isWeekend: false, requestExpiryHours: 8 },
+      { dayOfWeek: 3, startTime: "09:00", endTime: "18:00", isWeekend: false, requestExpiryHours: 8 },
+      { dayOfWeek: 4, startTime: "09:00", endTime: "18:00", isWeekend: false, requestExpiryHours: 8 },
+      { dayOfWeek: 5, startTime: "09:00", endTime: "18:00", isWeekend: false, requestExpiryHours: 8 },
+      { dayOfWeek: 6, startTime: "10:00", endTime: "16:00", isWeekend: true, requestExpiryHours: 8 },
+      { dayOfWeek: 0, startTime: "10:00", endTime: "16:00", isWeekend: true, requestExpiryHours: 8 },
     ];
 
     await this.prisma.workScheduleSetting.createMany({ data: defaultSchedule });
@@ -32,11 +32,33 @@ export class SettingsService {
     });
   }
 
-  async updateSchedule(dayOfWeek: number, startTime: string, endTime: string) {
+  async updateSchedule(dayOfWeek: number, startTime: string, endTime: string, requestExpiryHours?: number) {
     return this.prisma.workScheduleSetting.upsert({
       where: { dayOfWeek },
-      update: { startTime, endTime },
-      create: { dayOfWeek, startTime, endTime, isWeekend: dayOfWeek === 0 || dayOfWeek === 6 },
+      update: { 
+        startTime, 
+        endTime,
+        ...(requestExpiryHours !== undefined && { requestExpiryHours })
+      },
+      create: { 
+        dayOfWeek, 
+        startTime, 
+        endTime, 
+        isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+        requestExpiryHours: requestExpiryHours || 8
+      },
+    });
+  }
+
+  async getExpiredCount() {
+    return this.prisma.accessRequest.count({
+      where: { status: 'EXPIRED' }
+    });
+  }
+
+  async getAllSchedules() {
+    return this.prisma.workScheduleSetting.findMany({
+      orderBy: { dayOfWeek: 'asc' }
     });
   }
 }

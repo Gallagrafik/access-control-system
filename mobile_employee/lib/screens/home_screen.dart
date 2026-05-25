@@ -6,6 +6,7 @@ import '../models/employee.dart';
 import 'camera_screen.dart';
 import 'profile_screen.dart';
 import '../main.dart';
+import '../models/employee.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _activeRequests = [];
   bool _isLoading = false;
-  final String _deviceId = 'device-id-chrome-employee';
+  String get _deviceId => Employee.deviceId;
 
   @override
   void initState() {
@@ -31,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.101:3000/api/access-request/user/$_deviceId'),
+        Uri.parse('http://localhost:3000/api/access-request/user/$_deviceId'),
       );
       if (response.statusCode == 200) {
         setState(() {
@@ -48,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final employee = Employee.current;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -160,30 +162,44 @@ class _HomeScreenState extends State<HomeScreen> {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      color: const Color(0xFF18181B),
+                      elevation: isDarkMode ? 0 : 2,
+                      // Жестко привязываем цвета к общей переменной экрана
+                      color: isDarkMode ? const Color(0xFF18181B) : Colors.white,
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         leading: Container(
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: isReady ? Colors.green.withOpacity(0.1) : Colors.amber.withOpacity(0.1), // Исправлено на Colors.green
+                            color: isReady ? Colors.green.withOpacity(0.1) : Colors.amber.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
                             isReady ? Icons.login : Icons.logout,
-                            color: isReady ? Colors.green : Colors.amber, // Исправлено на Colors.green
+                            color: isReady ? Colors.green : Colors.amber,
                           ),
                         ),
                         title: Text(
                           'Код доступа: ${req['code']}',
-                          style: const TextStyle(fontFamily: 'Mono', fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
+                          style: TextStyle(
+                            fontFamily: 'Mono', 
+                            fontSize: 18, 
+                            fontWeight: FontWeight.bold, 
+                            color: isDarkMode ? Colors.blue[300] : Colors.blue[700], // Контрастный синий под обе темы
+                          ),
                         ),
                         subtitle: Text(
                           'Тип: ${isReady ? "На вход" : "На выход"} • Статус: Ожидание',
-                          style: const TextStyle(fontSize: 13, color: Colors.grey), // Исправлено на Colors.grey
+                          style: TextStyle(
+                            fontSize: 13, 
+                            color: isDarkMode ? Colors.grey[400] : Colors.grey[700], // Контрастный серый текст под обе темы
+                          ),
                         ),
-                        trailing: const Icon(Icons.hourglass_bottom, color: Colors.grey, size: 20), // Исправлено на Colors.grey
+                        trailing: Icon(
+                          Icons.hourglass_bottom, 
+                          color: isDarkMode ? Colors.grey[500] : Colors.grey[600], 
+                          size: 20,
+                        ),
                       ),
                     );
                   },

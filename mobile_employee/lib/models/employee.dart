@@ -1,12 +1,12 @@
 class Employee {
-  final String id; // ← Добавили поле для UUID из базы данных
+  final String id; 
   final String fullName;
   final String passportNumber;
   final String position;
   final String archivePhotoUrl;
 
   Employee({
-    required this.id, // ← Сделали обязательным
+    required this.id, 
     required this.fullName,
     required this.passportNumber,
     required this.position,
@@ -15,7 +15,7 @@ class Employee {
 
   factory Employee.fromJson(Map<String, dynamic> json) {
     return Employee(
-      id: json['id'] ?? '', // ← Считываем ID, пришедший от сервера
+      id: json['id'] ?? '', 
       fullName: json['fullName'] ?? '',
       passportNumber: json['passportNumber'] ?? '',
       position: json['position'] ?? '',
@@ -25,4 +25,5 @@ class Employee {
 
   static Employee? current;
   static String pin = '';
+  static String deviceId = 'device-id-chrome-employee';
 }

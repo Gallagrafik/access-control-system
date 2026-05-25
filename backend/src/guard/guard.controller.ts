@@ -1,9 +1,13 @@
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { GuardService } from './guard.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('guard')
 export class GuardController {
-  constructor(private readonly guardService: GuardService) {}
+  constructor(
+    private readonly guardService: GuardService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post('login')
   async login(@Body() body: { username: string; password: string }) {
@@ -20,6 +24,26 @@ export class GuardController {
   @Post('seed-users')
   async seedUsers() {
     return this.guardService.seedUsers();
+  }
+
+  @Post('fix-photos')
+  async fixPhotos() {
+    // Очищаем archivePhotoUrl у всех пользователей
+    const result = await this.prisma.user.updateMany({
+      where: {
+        archivePhotoUrl: {
+          not: null
+        }
+      },
+      data: {
+        archivePhotoUrl: null
+      }
+    });
+    
+    return { 
+      message: `Очищено ${result.count} записей`,
+      users: await this.prisma.user.findMany()
+    };
   }
 }
   

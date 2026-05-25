@@ -4,6 +4,10 @@ import 'package:flutter/services.dart';
 import '../models/employee.dart';
 import 'home_screen.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io' show Platform;
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -34,6 +38,26 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return [];
     }
   }
+  
+  Future<String> _getUniqueDeviceId() async {
+    final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    try {
+      if (kIsWeb) {
+        final webBrowserInfo = await deviceInfo.webBrowserInfo;
+        // Генерируем стабильный хэш на основе железа и браузера ПК
+        return 'web-${webBrowserInfo.userAgent.hashCode}-${webBrowserInfo.vendor}-${webBrowserInfo.platform}';
+      } else if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        return androidInfo.id; // Уникальный ID Android
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        return iosInfo.identifierForVendor ?? 'unknown-ios'; // Уникальный ID iOS
+      }
+    } catch (e) {
+      print('Ошибка генерации deviceId: $e');
+    }
+    return 'fallback-device-id-${DateTime.now().millisecondsSinceEpoch}';
+  }
 
   void _register() async {
     if (!_formKey.currentState!.validate()) return;
@@ -41,14 +65,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     setState(() {}); // Можно добавить переменную загрузки, если нужно
 
     try {
-      // 1. Генерируем или получаем ID устройства (фиксируем для этого браузера)
-      final deviceId = 'device-id-chrome-employee'; 
+      // 1. Динамически генерируем или получаем ID устройства (вместо хардкода)
+      final deviceId = await _getUniqueDeviceId(); 
       final normalizedPassport = _normalizePassport(_passportNumber);
 
       // 2. Отправляем запрос на регистрацию/привязку устройства на бэкенд
-      // Примечание: В NestJS обычно создается эндпоинт для привязки девайса сотрудника
       final response = await http.post(
-        Uri.parse('http://192.168.0.101:3000/api/users/register-device'),
+        Uri.parse('http://localhost:3000/api/users/register-device'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'fullName': _fullName.trim(),
@@ -66,8 +89,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         Employee.current = Employee.fromJson(responseData['user']);
         Employee.pin = _pin;
 
-        // Сохраняем deviceId в коде (можно расширить модель Employee или класс)
-        // Для простоты передаем в следующее окно или храним статично
+        // ИСПРАВЛЕНО: Записываем сгенерированный ID устройства в модель
+        Employee.deviceId = deviceId;
+
+        // ИСПРАВЛЕНО: Сохраняем deviceId в энергонезависимую память смартфона/браузера
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('saved_device_id', deviceId);
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Устройство успешно привязано! Регистрация завершена.'), backgroundColor: Colors.green),

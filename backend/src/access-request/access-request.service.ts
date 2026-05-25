@@ -45,18 +45,76 @@ export class AccessRequestService {
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
 
-    // Получение активных заявок со статусом PENDING
+  // Функция для перевода русских букв в английские (для инициалов)
+  private transliterateChar(char: string): string {
+    const dict: { [key: string]: string } = {
+      'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'ZH',
+      'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
+      'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'KH', 'Ц': 'TS',
+      'Ч': 'CH', 'Ш': 'SH', 'Щ': 'SHCH', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'YU', 'Я': 'YA'
+    };
+    return dict[char.toUpperCase()] || char.toUpperCase();
+  }
+
+  // Функция для сборки имени файла по шаблону: ISA4512345678.jpg
+  private generateArchiveFileName(user: any): string | null {
+    if (!user || !user.fullName || !user.passportNumber) return null;
+
+    // 1. Получаем части ФИО ["Иванов", "Сергей", "Александрович"]
+    const nameParts = user.fullName.trim().split(/\s+/);
+    
+    // 2. Берём только первую букву каждого слова и переводим в транслит (И->I, С->S, А->A)
+    const initials = nameParts
+      .map(part => {
+        const firstChar = part?.charAt(0).toUpperCase();
+        return this.transliterateChar(firstChar);
+      })
+      .join(''); // На выходе строго "ISA"
+
+    // 3. Очищаем номер паспорта от возможных пробелов
+    const passportClean = user.passportNumber.replace(/\s+/g, '');
+
+    // 4. Формируем итоговый путь: archive/ISA4512345678.jpg
+    return `archive/${initials}${passportClean}.jpg`;
+  }
+
+  // Получение активных заявок со статусом PENDING
   async getActiveRequests() {
-    return this.prisma.accessRequest.findMany({
+    const requests = await this.prisma.accessRequest.findMany({
       where: {
         status: 'PENDING',
       },
       include: {
-        user: true, // Обязательно подтягиваем данные сотрудника из таблицы users
+        user: true, // Подтягиваем связанные данные пользователя
       },
       orderBy: {
         createdAt: 'desc',
       },
+    });
+
+    const minioEndpoint = this.configService.get<string>('MINIO_ENDPOINT');
+    const minioBucket = this.configService.get<string>('MINIO_BUCKET') || 'access-photos';
+
+    return requests.map(req => {
+      let archivePhotoUrl: string | null = null;
+
+      if (req.user) {
+        // Если в БД у юзера уже прописана рабочая http-ссылка, используем её
+        if (req.user.archivePhotoUrl && req.user.archivePhotoUrl.startsWith('http')) {
+          archivePhotoUrl = req.user.archivePhotoUrl;
+        } else {
+          // Иначе генерируем ссылку на MinIO по шаблону ФИО-ИнициалыПаспорт
+          const archiveFileName = this.generateArchiveFileName(req.user);
+          if (archiveFileName) {
+            archivePhotoUrl = `${minioEndpoint}/${minioBucket}/${archiveFileName}`;
+          }
+        }
+      }
+
+      return {
+        ...req,
+        archivePhotoUrl: archivePhotoUrl, // Поле улетает на фронтенд в web-kpp
+      };
     });
   }
 
