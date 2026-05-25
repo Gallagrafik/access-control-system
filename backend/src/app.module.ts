@@ -5,7 +5,10 @@ import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AccessRequestModule } from './access-request/access-request.module';
 import { SettingsModule } from './settings/settings.module';
-import { GuardModule } from './guard/guard.module'; // ← Добавили импорт
+import { GuardModule } from './guard/guard.module';
+import { AccessLogModule } from './access-log/access-log.module';
+import { ExpiredModule } from './expired/expired.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -13,7 +16,10 @@ import { GuardModule } from './guard/guard.module'; // ← Добавили им
     UsersModule, 
     AccessRequestModule, 
     SettingsModule,
-    GuardModule, // ← Подключили модуль в систему
+    GuardModule,
+    AccessLogModule,
+    ExpiredModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],

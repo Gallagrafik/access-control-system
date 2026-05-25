@@ -6,6 +6,7 @@ import '../models/employee.dart';
 import 'camera_screen.dart';
 import 'profile_screen.dart';
 import '../main.dart';
+import '../models/employee.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _activeRequests = [];
   bool _isLoading = false;
-  final String _deviceId = 'device-id-chrome-employee';
+  String get _deviceId => Employee.deviceId;
 
   @override
   void initState() {
@@ -31,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.101:3000/api/access-request/user/$_deviceId'),
+        Uri.parse('http://localhost:3000/api/access-request/user/$_deviceId'),
       );
       if (response.statusCode == 200) {
         setState(() {

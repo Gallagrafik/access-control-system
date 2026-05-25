@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:convert';
 import 'package:image/image.dart' as img;
+import '../models/employee.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -114,10 +115,10 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.0.101:3000/api/access-request/create'),
+        Uri.parse('http://localhost:3000/api/access-request/create'),
       );
 
-      request.fields['deviceId'] = 'device-id-chrome-employee';
+      request.fields['deviceId'] = Employee.deviceId;
 
       if (!kIsWeb) {
         request.files.add(await http.MultipartFile.fromPath('selfie', _imagePath!));

@@ -45,7 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final passportClean = employee.passportNumber.replaceAll(RegExp(r'\s+'), '');
     
     // IP-адрес и бакет MinIO
-    const minioEndpoint = 'http://192.168.0.101:9000';
+    const minioEndpoint = 'http://localhost:9000';
     const minioBucket = 'access-photos';
 
     return '$minioEndpoint/$minioBucket/archive/$initials$passportClean.jpg';
