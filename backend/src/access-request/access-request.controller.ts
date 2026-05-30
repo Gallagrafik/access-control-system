@@ -31,8 +31,8 @@ export class AccessRequestController {
   @Post('process/:id')
   async processRequest(
     @Param('id') id: string,
-    @Body() body: { action: 'APPROVE' | 'REJECT' },
+    @Body() body: { action: 'APPROVE' | 'REJECT'; comment?: string },
   ) {
-    return this.accessRequestService.processRequest(id, body.action);
+    return this.accessRequestService.processRequest(id, body.action, body.comment);
   }
 }

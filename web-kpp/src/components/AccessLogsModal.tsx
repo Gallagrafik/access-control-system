@@ -4,7 +4,7 @@ interface AccessRequest {
   id: string;
   code: string;
   requestType: 'IN' | 'OUT';
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'ENTERED_WITHOUT_EXIT' | 'INCIDENT';
   createdAt: string;
   processedAt?: string | null;
   archivePhotoUrl?: string | null;
@@ -24,8 +24,10 @@ interface AccessLog {
   id: string;
   userId: string | null;
   requestId: string | null;
-  action: 'PASS' | 'REJECT' | 'CREATE_REQUEST' | 'LOGIN' | 'LOGOUT' | 'EXPIRE';
+  action: 'PASS' | 'REJECT' | 'CREATE_REQUEST' | 'LOGIN' | 'LOGOUT' | 'EXPIRE' | 'INCIDENT';
   timestamp: string;
+  deviceInfo?: string | null;
+  comment?: string | null;
   request?: AccessRequest | null;
 }
 
@@ -55,6 +57,13 @@ const formatFullDate = (dateString?: string) => {
   return `${day}.${month}.${year}`;
 };
 
+// Обрезка комментария для таблицы
+const truncateComment = (comment?: string | null, maxLength: number = 50) => {
+  if (!comment) return null;
+  if (comment.length <= maxLength) return comment;
+  return comment.substring(0, maxLength) + '...';
+};
+
 export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({ 
   isOpen, 
   onClose, 
@@ -70,11 +79,11 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
   const [endDate, setEndDate] = useState<string>(initialEndDate);
   const [searchName, setSearchName] = useState<string>('');
   const [selectedRequest, setSelectedRequest] = useState<AccessRequest | null>(null);
+  const [selectedComment, setSelectedComment] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
 
-  // Загрузка логов при открытии
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
@@ -95,7 +104,6 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
     }
   }, [isOpen]);
 
-  // Синхронизация пропсов с состоянием при открытии
   useEffect(() => {
     if (isOpen) {
       setStatusFilter(initialFilter);
@@ -108,7 +116,6 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
 
   if (!isOpen) return null;
 
-  // ГРУППИРУЕМ ЛОГИ ПО requestId, оставляем только последний по времени для каждой заявки
   const uniqueLogsMap = new Map<string, AccessLog>();
   
   logs.forEach(log => {
@@ -122,12 +129,18 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
   
   const uniqueLogs = Array.from(uniqueLogsMap.values());
 
-  // Фильтрация уникальных логов
   const filteredLogs = uniqueLogs.filter(log => {
     const reqData = log.request;
     const fullName = (reqData?.user?.fullName || 'Системное событие').toLowerCase();
+    const code = (reqData?.code || '').toLowerCase();
     
-    if (searchName && !fullName.includes(searchName.toLowerCase().trim())) return false;
+    if (searchName) {
+      const query = searchName.toLowerCase().trim();
+      const matchesByName = fullName.includes(query);
+      const matchesByCode = code.startsWith(query);
+      if (!matchesByName && !matchesByCode) return false;
+    }
+    
     if (statusFilter !== 'ALL' && reqData?.status !== statusFilter) return false;
     if (typeFilter !== 'ALL' && reqData?.requestType !== typeFilter) return false;
     
@@ -161,7 +174,6 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
 
   const handleImageError = (type: string, id: string) => {
     setImageErrors(prev => ({ ...prev, [`${type}_${id}`]: true }));
-    console.error(`Failed to load ${type} image for request ${id}`);
   };
 
   const getStatusStyle = (status: string) => {
@@ -181,9 +193,21 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
     }
   };
 
+  const handleRowClick = (log: AccessLog) => {
+    if (log.request) {
+      setSelectedRequest(log.request);
+      setSelectedComment(log.comment || null);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setSelectedRequest(null);
+    setSelectedComment(null);
+  };
+
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-      <div style={{ backgroundColor: theme.bg, color: theme.text, width: '1000px', height: '680px', borderRadius: '20px', padding: '30px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', border: `1px solid ${theme.border}`, position: 'relative' }}>
+      <div style={{ backgroundColor: theme.bg, color: theme.text, width: '1200px', height: '680px', borderRadius: '20px', padding: '30px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', border: `1px solid ${theme.border}`, position: 'relative' }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexShrink: 0 }}>
           <h2 style={{ margin: 0, fontSize: '24px' }}>История заявок</h2>
@@ -192,14 +216,14 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'center', padding: '12px', borderRadius: '12px', backgroundColor: theme.subBg, marginBottom: '20px', border: `1px solid ${theme.border}`, flexShrink: 0 }}>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 200px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold', color: theme.textMuted }}>ФИО:</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 250px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 'bold', color: theme.textMuted }}>Поиск:</label>
             <input 
               type="text" 
-              placeholder="Поиск сотрудника..." 
+              placeholder="По ФИО или коду заявки" 
               value={searchName} 
               onChange={(e) => setSearchName(e.target.value)} 
-              style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', backgroundColor: theme.selectBg, color: theme.text, border: `1px solid ${theme.border}`, outline: 'none', fontSize: '13px' }} 
+              style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', backgroundColor: theme.selectBg, color: theme.text, border: `1px solid ${theme.border}`, outline: 'none', fontSize: '13px' }} 
             />
           </div>
 
@@ -261,6 +285,7 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
                   <th style={{ padding: '12px 8px' }}>Статус</th>
                   <th style={{ padding: '12px 8px' }}>Тип</th>
                   <th style={{ padding: '12px 8px' }}>Создана в</th>
+                  <th style={{ padding: '12px 8px' }}>Комментарий</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,8 +294,20 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
                   const fullName = reqData?.user?.fullName || 'Системное событие';
                   const code = reqData?.code ? ` [${reqData.code}]` : '';
                   const statusStyle = getStatusStyle(reqData?.status || '');
+                  const truncatedComment = truncateComment(log.comment);
+                  
                   return (
-                    <tr key={log.id} onClick={() => reqData && setSelectedRequest(reqData)} style={{ borderBottom: `1px solid ${theme.rowBorder}`, cursor: reqData ? 'pointer' : 'default' }} onMouseEnter={(e) => reqData && (e.currentTarget.style.backgroundColor = isDarkMode ? '#27272a' : '#f8fafc')} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                    <tr 
+                      key={log.id} 
+                      onClick={() => handleRowClick(log)} 
+                      style={{ 
+                        borderBottom: `1px solid ${theme.rowBorder}`, 
+                        cursor: reqData ? 'pointer' : 'default',
+                        transition: 'background-color 0.2s'
+                      }} 
+                      onMouseEnter={(e) => reqData && (e.currentTarget.style.backgroundColor = isDarkMode ? '#27272a' : '#f8fafc')} 
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
                       <td style={{ padding: '14px 8px', fontFamily: 'monospace' }}>{formatFullDate(log.timestamp)} в {formatLogTime(log.timestamp)}</td>
                       <td style={{ padding: '14px 8px', fontWeight: '500' }}>{fullName}<span style={{ color: '#10b981', fontFamily: 'monospace' }}>{code}</span>{reqData && <span style={{ fontSize: '11px', display: 'block', color: theme.textMuted, fontWeight: 'normal' }}>Нажмите для фото</span>}</td>
                       <td style={{ padding: '14px 8px' }}>
@@ -284,6 +321,22 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
                         </span>
                       </td>
                       <td style={{ padding: '14px 8px', fontFamily: 'monospace', color: theme.textMuted }}>{reqData?.createdAt ? formatLogTime(reqData.createdAt) : '—'}</td>
+                      <td style={{ padding: '14px 8px', fontSize: '13px', color: theme.textMuted, maxWidth: '200px' }}>
+                        {truncatedComment ? (
+                          <span style={{ 
+                            display: 'inline-block',
+                            padding: '4px 8px',
+                            color: theme.text,
+                            fontSize: '12px',
+                            maxWidth: '180px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {truncatedComment}
+                          </span>
+                        ) : '—'}
+                      </td>
                     </tr>
                   );
                 })}
@@ -292,90 +345,165 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
           )}
         </div>
 
+        {/* Модалка с фото и комментарием - левая часть статичная, правая скроллится */}
         {selectedRequest && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
-            <div style={{ backgroundColor: theme.subBg, color: theme.text, padding: '25px', borderRadius: '20px', width: '540px', border: `1px solid ${theme.border}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                <h3 style={{ margin: 0 }}>Фотографии по заявке #{selectedRequest.code}</h3>
-                <button onClick={() => setSelectedRequest(null)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            <div style={{ 
+              backgroundColor: theme.subBg, 
+              color: theme.text, 
+              borderRadius: '20px', 
+              width: '900px', 
+              maxHeight: '80vh',
+              border: `1px solid ${theme.border}`,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}>
+              {/* Заголовок с крестиком */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                padding: '20px 24px',
+                borderBottom: `1px solid ${theme.border}`,
+                flexShrink: 0
+              }}>
+                <h3 style={{ margin: 0 }}>Детали заявки #{selectedRequest.code}</h3>
+                <button 
+                  onClick={handleCloseModal} 
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    color: '#ef4444', 
+                    fontSize: '28px', 
+                    cursor: 'pointer',
+                    padding: '0 8px',
+                    lineHeight: 1
+                  }}
+                >
+                  ×
+                </button>
               </div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div>
-                  <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: theme.textMuted, textAlign: 'center' }}>Архивное фото</p>
-                  {(() => {
-                    const archivePhotoUrl = getArchivePhotoUrl(selectedRequest);
-                    const errorKey = `archive_${selectedRequest.id}`;
-                    
-                    if (archivePhotoUrl && !imageErrors[errorKey]) {
-                      return (
-                        <img 
-                          src={archivePhotoUrl} 
-                          alt="Архив" 
-                          style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px', border: `1px solid ${theme.border}` }}
-                          onError={() => handleImageError('archive', selectedRequest.id)}
-                        />
-                      );
-                    } else {
-                      return (
-                        <div style={{ width: '100%', aspectRatio: '3/4', backgroundColor: theme.imgPlaceholder, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textMuted, flexDirection: 'column', gap: '8px' }}>
-                          <span>📷</span>
-                          <span style={{ fontSize: '12px' }}>Нет фото</span>
-                        </div>
-                      );
-                    }
-                  })()}
-                </div>
-
-                <div>
-                  <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: theme.textMuted, textAlign: 'center' }}>Селфи с КПП</p>
-                  {(() => {
-                    const errorKey = `selfie_${selectedRequest.id}`;
-                    
-                    if (selectedRequest.selfieUrl && !imageErrors[errorKey]) {
-                      return (
-                        <img 
-                          src={selectedRequest.selfieUrl} 
-                          alt="Селфи" 
-                          style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px', border: `1px solid ${theme.border}` }}
-                          onError={() => handleImageError('selfie', selectedRequest.id)}
-                        />
-                      );
-                    } else {
-                      return (
-                        <div style={{ width: '100%', aspectRatio: '3/4', backgroundColor: theme.imgPlaceholder, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textMuted, flexDirection: 'column', gap: '8px' }}>
-                          <span>📸</span>
-                          <span style={{ fontSize: '12px' }}>Нет селфи</span>
-                        </div>
-                      );
-                    }
-                  })()}
-                </div>
-              </div>
-
-              <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                <p style={{ fontWeight: 'bold', margin: '0 0 4px 0', fontSize: '18px' }}>
-                  {selectedRequest.user?.fullName || 'Системное событие'}
-                </p>
-                <p style={{ color: theme.textMuted, margin: '0 0 12px 0', fontSize: '14px' }}>
-                  {selectedRequest.user?.position || ''}
-                </p>
+              {/* Основное содержимое - левая часть статичная, правая скроллится */}
+              <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '24px', gap: '24px' }}>
                 
-                {selectedRequest.user?.passportNumber && (
-                  <span style={{ 
-                    display: 'inline-block',
-                    padding: '4px 10px', 
-                    borderRadius: '6px', 
-                    fontSize: '13px', 
-                    fontFamily: 'monospace',
-                    fontWeight: 'bold',
-                    backgroundColor: isDarkMode ? '#27272a' : '#f1f5f9',
-                    color: isDarkMode ? '#e4e4e7' : '#334155',
-                    border: `1px solid ${theme.border}`
-                  }}>
-                    Паспорт: {selectedRequest.user.passportNumber}
-                  </span>
-                )}
+                {/* Левая часть: фото и данные (статичная, не скроллится) */}
+                <div style={{ flex: '0 0 380px', overflow: 'visible' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                    <div>
+                      <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: theme.textMuted, textAlign: 'center' }}>Архивное фото</p>
+                      {(() => {
+                        const archivePhotoUrl = getArchivePhotoUrl(selectedRequest);
+                        const errorKey = `archive_${selectedRequest.id}`;
+                        
+                        if (archivePhotoUrl && !imageErrors[errorKey]) {
+                          return (
+                            <img 
+                              src={archivePhotoUrl} 
+                              alt="Архив" 
+                              style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px', border: `1px solid ${theme.border}` }}
+                              onError={() => handleImageError('archive', selectedRequest.id)}
+                            />
+                          );
+                        } else {
+                          return (
+                            <div style={{ width: '100%', aspectRatio: '3/4', backgroundColor: theme.imgPlaceholder, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textMuted, flexDirection: 'column', gap: '8px' }}>
+                              <span style={{ fontSize: '24px' }}>📷</span>
+                              <span style={{ fontSize: '12px' }}>Нет фото</span>
+                            </div>
+                          );
+                        }
+                      })()}
+                    </div>
+
+                    <div>
+                      <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: theme.textMuted, textAlign: 'center' }}>Селфи с КПП</p>
+                      {(() => {
+                        const errorKey = `selfie_${selectedRequest.id}`;
+                        
+                        if (selectedRequest.selfieUrl && !imageErrors[errorKey]) {
+                          return (
+                            <img 
+                              src={selectedRequest.selfieUrl} 
+                              alt="Селфи" 
+                              style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', borderRadius: '12px', border: `1px solid ${theme.border}` }}
+                              onError={() => handleImageError('selfie', selectedRequest.id)}
+                            />
+                          );
+                        } else {
+                          return (
+                            <div style={{ width: '100%', aspectRatio: '3/4', backgroundColor: theme.imgPlaceholder, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textMuted, flexDirection: 'column', gap: '8px' }}>
+                              <span style={{ fontSize: '24px' }}>📸</span>
+                              <span style={{ fontSize: '12px' }}>Нет селфи</span>
+                            </div>
+                          );
+                        }
+                      })()}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center', borderTop: `1px solid ${theme.border}`, paddingTop: '16px' }}>
+                    <p style={{ fontWeight: 'bold', margin: '0 0 4px 0', fontSize: '16px' }}>
+                      {selectedRequest.user?.fullName || 'Системное событие'}
+                    </p>
+                    <p style={{ color: theme.textMuted, margin: '0 0 12px 0', fontSize: '13px' }}>
+                      {selectedRequest.user?.position || ''}
+                    </p>
+                    
+                    {selectedRequest.user?.passportNumber && (
+                      <span style={{ 
+                        display: 'inline-block',
+                        padding: '4px 10px', 
+                        borderRadius: '6px', 
+                        fontSize: '12px', 
+                        fontFamily: 'monospace',
+                        backgroundColor: isDarkMode ? '#27272a' : '#f1f5f9',
+                        color: theme.text,
+                        border: `1px solid ${theme.border}`
+                      }}>
+                        Паспорт: {selectedRequest.user.passportNumber}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Правая часть: комментарий (скроллится) */}
+                <div style={{ 
+                  flex: 1, 
+                  overflowY: 'auto',
+                  backgroundColor: isDarkMode ? '#1f1f23' : '#f8fafc',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  border: `1px solid ${theme.border}`
+                }}>
+                  {selectedComment ? (
+                    <div>
+                      <p style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '600', color: theme.textMuted }}>Причина задержки:</p>
+                      <p style={{ 
+                        margin: 0, 
+                        fontSize: '14px', 
+                        lineHeight: 1.6, 
+                        color: theme.text,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word'
+                      }}>
+                        {selectedComment}
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      height: '100%',
+                      color: theme.textMuted,
+                      fontSize: '14px'
+                    }}>
+                      Нет комментария
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
