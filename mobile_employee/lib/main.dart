@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/registration_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -8,7 +8,6 @@ void main() {
   runApp(const MyApp());
 }
 
-// Глобальный notifier для темы (чтобы все экраны могли менять тему)
 final themeNotifier = ValueNotifier<bool>(true);
 
 class MyApp extends StatelessWidget {
@@ -28,7 +27,7 @@ class MyApp extends StatelessWidget {
                   appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF18181B)),
                 )
               : ThemeData.light(),
-          home: const RegistrationScreen(),
+          home: const LoginScreen(),
         );
       },
     );
