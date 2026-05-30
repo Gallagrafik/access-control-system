@@ -17,7 +17,7 @@ interface AccessRequest {
   id: string;
   code: string;
   requestType: 'IN' | 'OUT';
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'ENTERED_WITHOUT_EXIT';
   fullName?: string;
   position?: string;
   createdAt: string;
@@ -97,12 +97,14 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
     return startDate;
   };
 
-  // Получение даты окончания смены (сегодня + workEnd)
+  // Получение даты окончания смены (сегодня + workEnd + 1 минута)
   const getWorkEndDateTime = (): Date => {
     const now = new Date();
     const [endHour, endMinute] = workEnd.split(':').map(Number);
     const endDate = new Date(now);
     endDate.setHours(endHour, endMinute, 0, 0);
+    // Добавляем 1 минуту, чтобы захватить все заявки до конца смены
+    endDate.setMinutes(endDate.getMinutes() + 1);
     return endDate;
   };
 
@@ -110,23 +112,17 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
   const checkAndOpenExpiredModal = () => {
     const now = new Date();
     const workEndDate = getWorkEndDateTime();
-
-    console.log('Текущее время:', now);
-    console.log('Время окончания смены:', workEndDate);
+    // Убираем добавленную минуту для сравнения с текущим временем
+    const workEndDateForCompare = new Date(workEndDate);
+    workEndDateForCompare.setMinutes(workEndDateForCompare.getMinutes() - 1);
     
-    // Если текущее время >= время окончания смены
-    if (now >= workEndDate) {
+    if (now >= workEndDateForCompare) {
       const startDateTime = getWorkStartDateTime();
       const endDateTime = getWorkEndDateTime();
-    
-      const startStr = formatDateForFilter(startDateTime);
-      const endStr = formatDateForFilter(endDateTime);
-    
-      console.log('Устанавливаем даты:', { startStr, endStr });
       
       setLogsStartDate(formatDateForFilter(startDateTime));
       setLogsEndDate(formatDateForFilter(endDateTime));
-      setLogsFilter('EXPIRED');
+      setLogsFilter('ENTERED_WITHOUT_EXIT');
       setIsLogsOpen(true);
     }
   };
@@ -437,6 +433,21 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
                     <p style={{ color: isDarkMode ? '#a3a3a3' : '#64748b', margin: 0 }}>
                       {req.user?.position || req.position || ''}
                     </p>
+                  </div>
+                  <div style={{ marginTop: '8px' }}>
+                    {req.status === 'ENTERED_WITHOUT_EXIT' && (
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                        color: '#a855f7'
+                      }}>
+                        ⚠️ Вошёл без выхода
+                      </span>
+                    )}
                   </div>
                   <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <span style={{ color: '#f59e0b', fontSize: '20px', fontWeight: 'bold' }}> ВЫХОД</span>

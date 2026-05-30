@@ -4,6 +4,7 @@ import { CreateAccessRequestDto, RequestTypeDto } from './dto/create-access-requ
 import { Client as MinioClient } from 'minio';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import { RequestStatus } from '@prisma/client';
 
 @Injectable()
 export class AccessRequestService {
@@ -22,7 +23,6 @@ export class AccessRequestService {
       accessKey: this.configService.get<string>('MINIO_ACCESS_KEY')!,
       secretKey: this.configService.get<string>('MINIO_SECRET_KEY')!,
     });
-    // Автоматическая настройка публичного доступа на скачивание фото
     const bucketName = this.configService.get<string>('MINIO_BUCKET') || 'access-photos';
     const policy = {
       Version: '2012-10-17',
@@ -37,15 +37,14 @@ export class AccessRequestService {
     };
 
     this.minioClient.setBucketPolicy(bucketName, JSON.stringify(policy))
-      .then(() => this.logger.log(`✅ Доступ к бакету ${bucketName} успешно открыт (PUBLIC)`))
-      .catch((err) => this.logger.error(`❌ Ошибка настройки прав бакета: ${err.message}`));
+      .then(() => this.logger.log(`Доступ к бакету ${bucketName} успешно открыт (PUBLIC)`))
+      .catch((err) => this.logger.error(`Ошибка настройки прав бакета: ${err.message}`));
   }
 
   private generateCode(): string {
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
 
-  // Функция для перевода русских букв в английские (для инициалов)
   private transliterateChar(char: string): string {
     const dict: { [key: string]: string } = {
       'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'ZH',
@@ -56,36 +55,28 @@ export class AccessRequestService {
     return dict[char.toUpperCase()] || char.toUpperCase();
   }
 
-  // Функция для сборки имени файла по шаблону: ISA4512345678.jpg
   private generateArchiveFileName(user: any): string | null {
     if (!user || !user.fullName || !user.passportNumber) return null;
-
-    // 1. Получаем части ФИО ["Иванов", "Сергей", "Александрович"]
     const nameParts = user.fullName.trim().split(/\s+/);
-    
-    // 2. Берём только первую букву каждого слова и переводим в транслит (И->I, С->S, А->A)
     const initials = nameParts
       .map(part => {
         const firstChar = part?.charAt(0).toUpperCase();
         return this.transliterateChar(firstChar);
       })
-      .join(''); // На выходе строго "ISA"
-
-    // 3. Очищаем номер паспорта от возможных пробелов
+      .join('');
     const passportClean = user.passportNumber.replace(/\s+/g, '');
-
-    // 4. Формируем итоговый путь: archive/ISA4512345678.jpg
     return `archive/${initials}${passportClean}.jpg`;
   }
 
-  // Получение активных заявок со статусом PENDING
   async getActiveRequests() {
     const requests = await this.prisma.accessRequest.findMany({
       where: {
-        status: 'PENDING',
+        status: {
+          in: [RequestStatus.PENDING, RequestStatus.ENTERED_WITHOUT_EXIT]
+        }
       },
       include: {
-        user: true, // Подтягиваем связанные данные пользователя
+        user: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -99,11 +90,9 @@ export class AccessRequestService {
       let archivePhotoUrl: string | null = null;
 
       if (req.user) {
-        // Если в БД у юзера уже прописана рабочая http-ссылка, используем её
         if (req.user.archivePhotoUrl && req.user.archivePhotoUrl.startsWith('http')) {
           archivePhotoUrl = req.user.archivePhotoUrl;
         } else {
-          // Иначе генерируем ссылку на MinIO по шаблону ФИО-ИнициалыПаспорт
           const archiveFileName = this.generateArchiveFileName(req.user);
           if (archiveFileName) {
             archivePhotoUrl = `${minioEndpoint}/${minioBucket}/${archiveFileName}`;
@@ -113,16 +102,14 @@ export class AccessRequestService {
 
       return {
         ...req,
-        archivePhotoUrl: archivePhotoUrl, // Поле улетает на фронтенд в web-kpp
+        archivePhotoUrl: archivePhotoUrl,
       };
     });
   }
 
-  // Изменение статуса заявки (гашение по кнопке "Пропустить")
   async processRequest(id: string, action: 'APPROVE' | 'REJECT') {
-    const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const status = action === 'APPROVE' ? RequestStatus.APPROVED : RequestStatus.REJECTED;
 
-    // Находим текущую заявку
     const currentRequest = await this.prisma.accessRequest.findUnique({
       where: { id },
       include: { user: true },
@@ -132,16 +119,40 @@ export class AccessRequestService {
       throw new BadRequestException('Заявка не найдена');
     }
 
+    // Обработка INCIDENT для заявки со статусом ENTERED_WITHOUT_EXIT
+    if (action === 'REJECT' && currentRequest.status === RequestStatus.ENTERED_WITHOUT_EXIT) {
+      await this.prisma.accessRequest.update({
+        where: { id },
+        data: {
+          status: RequestStatus.INCIDENT,
+          processedAt: new Date(),
+          processedBy: 'admin'
+        }
+      });
+
+      await this.prisma.accessLog.create({
+        data: {
+          requestId: id,
+          userId: currentRequest.userId,
+          action: 'INCIDENT',
+          guardId: 'admin',
+          timestamp: new Date(),
+        }
+      });
+
+      return { message: 'Заявка помечена как инцидент' };
+    }
+
     // Если отклоняем ВХОД — автоматически отклоняем и ВЫХОД с тем же кодом
     if (action === 'REJECT' && currentRequest.requestType === 'IN') {
       await this.prisma.accessRequest.updateMany({
         where: {
           code: currentRequest.code,
           userId: currentRequest.userId,
-          status: 'PENDING',
+          status: RequestStatus.PENDING,
         },
         data: {
-          status: 'REJECTED',
+          status: RequestStatus.REJECTED,
           processedAt: new Date(),
           processedBy: 'admin',
         },
@@ -158,7 +169,6 @@ export class AccessRequestService {
       },
     });
 
-    // Логируем действие
     await this.prisma.accessLog.create({
       data: {
         requestId: id,
@@ -175,12 +185,11 @@ export class AccessRequestService {
     };
   }
 
-  // Поиск активных заявок сотрудника в PostgreSQL
   async getUserRequests(deviceId: string) {
     return this.prisma.accessRequest.findMany({
       where: {
         deviceId: deviceId,
-        status: 'PENDING', // Показываем только те, что еще не обработал охранник
+        status: RequestStatus.PENDING,
       },
       orderBy: {
         createdAt: 'desc',
@@ -196,7 +205,6 @@ export class AccessRequestService {
     if (!selfie) throw new BadRequestException('Селфи обязательно');
     if (!dto.deviceId) throw new BadRequestException('Device ID обязателен');
 
-    // Ищем устройство + пользователя
     const device = await this.prisma.device.findFirst({
       where: { deviceId: dto.deviceId },
       include: { user: true },
@@ -207,11 +215,8 @@ export class AccessRequestService {
     }
 
     const user = device.user;
-
-    // Генерируем один общий код для IN и OUT
     const code = this.generateCode();
 
-    // Сохраняем селфи в MinIO
     const fileExtension = selfie.originalname.split('.').pop() || 'jpg';
     const fileName = `selfies/${randomUUID()}.${fileExtension}`;
 
@@ -225,7 +230,6 @@ export class AccessRequestService {
 
     const selfieUrl = `${this.configService.get<string>('MINIO_ENDPOINT')}/${this.configService.get<string>('MINIO_BUCKET')}/${fileName}`;
 
-    // Создаём сразу две заявки (IN + OUT) с одним кодом
     const [requestIn, requestOut] = await this.prisma.$transaction([
       this.prisma.accessRequest.create({
         data: {
@@ -234,7 +238,7 @@ export class AccessRequestService {
           deviceId: dto.deviceId,
           selfieUrl,
           requestType: 'IN',
-          status: 'PENDING',
+          status: RequestStatus.PENDING,
         },
       }),
       this.prisma.accessRequest.create({
@@ -244,12 +248,12 @@ export class AccessRequestService {
           deviceId: dto.deviceId,
           selfieUrl,
           requestType: 'OUT',
-          status: 'PENDING',
+          status: RequestStatus.PENDING,
         },
       }),
     ]);
 
-    this.logger.log(`✅ Создано 2 заявки с кодом ${code} для пользователя ${user.fullName}`);
+    this.logger.log(`Создано 2 заявки с кодом ${code} для пользователя ${user.fullName}`);
 
     return {
       success: true,

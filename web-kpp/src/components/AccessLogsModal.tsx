@@ -6,6 +6,7 @@ interface AccessRequest {
   requestType: 'IN' | 'OUT';
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
   createdAt: string;
+  processedAt?: string | null;
   archivePhotoUrl?: string | null;
   selfieUrl?: string | null;
   user?: {
@@ -62,7 +63,6 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
   initialStartDate = '',
   initialEndDate = ''
 }) => {
-  // ВСЕ ХУКИ ДОЛЖНЫ БЫТЬ ДО ЛЮБОГО return !!!
   const [logs, setLogs] = useState<AccessLog[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>(initialFilter);
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
@@ -106,26 +106,40 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
     }
   }, [isOpen, initialFilter, initialStartDate, initialEndDate]);
 
-  // ТОЛЬКО ПОСЛЕ ВСЕХ ХУКОВ можно делать ранний return
   if (!isOpen) return null;
 
-  // Фильтрация логов
-  const filteredLogs = logs.filter(log => {
+  // ГРУППИРУЕМ ЛОГИ ПО requestId, оставляем только последний по времени для каждой заявки
+  const uniqueLogsMap = new Map<string, AccessLog>();
+  
+  logs.forEach(log => {
+    if (!log.requestId) return;
+    
+    const existing = uniqueLogsMap.get(log.requestId);
+    if (!existing || new Date(log.timestamp) > new Date(existing.timestamp)) {
+      uniqueLogsMap.set(log.requestId, log);
+    }
+  });
+  
+  const uniqueLogs = Array.from(uniqueLogsMap.values());
+
+  // Фильтрация уникальных логов
+  const filteredLogs = uniqueLogs.filter(log => {
     const reqData = log.request;
     const fullName = (reqData?.user?.fullName || 'Системное событие').toLowerCase();
     
     if (searchName && !fullName.includes(searchName.toLowerCase().trim())) return false;
     if (statusFilter !== 'ALL' && reqData?.status !== statusFilter) return false;
     if (typeFilter !== 'ALL' && reqData?.requestType !== typeFilter) return false;
+    
     if (startDate) {
-      const startLogDate = new Date(startDate).getTime();
+      const startDateMs = new Date(startDate).getTime();
       const logTimestamp = new Date(log.timestamp).getTime();
-      if (logTimestamp < startLogDate) return false;
+      if (logTimestamp < startDateMs) return false;
     }
     if (endDate) {
-      const endLogDate = new Date(endDate).getTime();
+      const endDateMs = new Date(endDate).getTime();
       const logTimestamp = new Date(log.timestamp).getTime();
-      if (logTimestamp > endLogDate) return false;
+      if (logTimestamp > endDateMs) return false;
     }
     return true;
   });
@@ -158,6 +172,10 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
         return { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', text: 'Отклонено' };
       case 'EXPIRED':
         return { bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', text: 'Просрочено' };
+      case 'ENTERED_WITHOUT_EXIT':
+        return { bg: 'rgba(139, 92, 246, 0.15)', color: '#a855f7', text: 'Вошёл без выхода' };
+      case 'INCIDENT':
+        return { bg: 'rgba(185, 28, 28, 0.15)', color: '#b91c1c', text: 'Инцидент' };
       default:
         return { bg: 'transparent', color: theme.textMuted, text: '—' };
     }
@@ -168,7 +186,7 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
       <div style={{ backgroundColor: theme.bg, color: theme.text, width: '1000px', height: '680px', borderRadius: '20px', padding: '30px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', border: `1px solid ${theme.border}`, position: 'relative' }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexShrink: 0 }}>
-          <h2 style={{ margin: 0, fontSize: '24px' }}>История действий (Access Logs)</h2>
+          <h2 style={{ margin: 0, fontSize: '24px' }}>История заявок</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '28px', cursor: 'pointer' }}>&times;</button>
         </div>
 
@@ -192,6 +210,8 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
               <option value="APPROVED">Принято</option>
               <option value="REJECTED">Отклонено</option>
               <option value="EXPIRED">Просрочено</option>
+              <option value="ENTERED_WITHOUT_EXIT">Вошёл без выхода</option>
+              <option value="INCIDENT">Инцидент</option>
             </select>
           </div>
 
@@ -230,13 +250,13 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
         <div style={{ overflowY: 'auto', flex: 1, paddingRight: '5px' }}>
           {loading && <div style={{ textAlign: 'center', padding: '40px', color: theme.textMuted, fontSize: '18px' }}>Загрузка логов...</div>}
           {error && <div style={{ textAlign: 'center', padding: '40px', color: '#ef4444' }}><p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>Ошибка соединения</p><p style={{ fontSize: '14px', margin: 0 }}>{error}</p></div>}
-          {!loading && !error && filteredLogs.length === 0 && <div style={{ textAlign: 'center', padding: '40px', color: theme.textMuted }}>Записи не найдены</div>}
+          {!loading && !error && filteredLogs.length === 0 && <div style={{ textAlign: 'center', padding: '40px', color: theme.textMuted }}>Заявки не найдены</div>}
           
           {!loading && !error && filteredLogs.length > 0 && (
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: `2px solid ${theme.border}`, color: theme.textMuted, fontSize: '14px' }}>
-                  <th style={{ padding: '12px 8px' }}>Дата и Время</th>
+                  <th style={{ padding: '12px 8px' }}>Дата и время</th>
                   <th style={{ padding: '12px 8px' }}>Сотрудник / Код</th>
                   <th style={{ padding: '12px 8px' }}>Статус</th>
                   <th style={{ padding: '12px 8px' }}>Тип</th>

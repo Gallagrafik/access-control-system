@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -8,7 +8,6 @@ export class ExpiredService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // Проверяем каждую минуту
   @Cron('*/1 * * * *')
   async markExpiredRequests() {
     this.logger.log('Проверка просроченных заявок...');
@@ -17,7 +16,6 @@ export class ExpiredService {
       const now = new Date();
       const currentDay = now.getDay();
 
-      // Получаем настройки для сегодняшнего дня
       const settings = await this.prisma.workScheduleSetting.findUnique({
         where: { dayOfWeek: currentDay }
       });
@@ -30,65 +28,92 @@ export class ExpiredService {
       const expiryHours = settings.requestExpiryHours || 8;
       const [endHour, endMinute] = settings.endTime.split(':').map(Number);
 
-      // Время окончания смены сегодня
       const workEndTime = new Date();
       workEndTime.setHours(endHour, endMinute, 0, 0);
 
-      // Время, старше которого заявки считаются просроченными по часам
       const expiryTimeByHours = new Date();
       expiryTimeByHours.setHours(expiryTimeByHours.getHours() - expiryHours);
 
-      // Проверяем, наступило ли время окончания смены
       const isAfterWorkEnd = now > workEndTime;
 
-      // Формируем условие для просроченных заявок:
-      // 1. Статус PENDING
-      // 2. И (создана более expiryHours назад ИЛИ (после окончания смены И создана до окончания смены))
+      // === 1. СНАЧАЛА: Вошёл без выхода (IN = APPROVED, OUT = PENDING) ===
+      if (isAfterWorkEnd) {
+        const approvedIns = await this.prisma.accessRequest.findMany({
+          where: {
+            status: 'APPROVED',
+            requestType: 'IN'
+          },
+          select: { code: true, userId: true, deviceId: true }
+        });
+
+        for (const approvedIn of approvedIns) {
+          const outRequest = await this.prisma.accessRequest.findFirst({
+            where: {
+              userId: approvedIn.userId,
+              code: approvedIn.code,
+              requestType: 'OUT',
+              status: 'PENDING'
+            },
+            select: { id: true, userId: true, deviceId: true, code: true }
+          });
+
+          if (outRequest) {
+            await this.prisma.accessRequest.update({
+              where: { id: outRequest.id },
+              data: {
+                status: 'ENTERED_WITHOUT_EXIT',
+                processedAt: new Date(),
+                processedBy: 'system'
+              }
+            });
+
+            await this.prisma.accessLog.create({
+              data: {
+                requestId: outRequest.id,
+                userId: outRequest.userId,
+                action: 'EXPIRE',
+                guardId: 'system',
+                timestamp: new Date(),
+                deviceInfo: outRequest.deviceId // записываем deviceId заявки
+              }
+            });
+
+            this.logger.log(`Заявка OUT ${outRequest.code} помечена как вошёл без выхода (deviceId: ${outRequest.deviceId})`);
+          }
+        }
+      }
+
+      // === 2. ПОТОМ: Обычные просроченные заявки (PENDING, которые не были обработаны выше) ===
       const expiredRequests = await this.prisma.accessRequest.findMany({
         where: {
           status: 'PENDING',
           OR: [
-            // Условие 1: заявка создана более X часов назад
             { createdAt: { lt: expiryTimeByHours } },
-            // Условие 2: после окончания смены И заявка создана до окончания смены
             ...(isAfterWorkEnd ? [{ createdAt: { lt: workEndTime } }] : [])
           ]
-        }
-      });
-
-      if (expiredRequests.length === 0) {
-        this.logger.log('Просроченных заявок не найдено');
-        return;
-      }
-
-      // Помечаем найденные заявки как EXPIRED
-      const result = await this.prisma.accessRequest.updateMany({
-        where: {
-          id: { in: expiredRequests.map(r => r.id) }
         },
-        data: {
-          status: 'EXPIRED',
-          processedAt: new Date(),
-          processedBy: 'system'
-        }
+        select: { id: true, userId: true, deviceId: true, code: true }
       });
 
-      this.logger.log(`Помечено ${result.count} просроченных заявок`);
-      
-      // Создаём логи для каждой просроченной заявки
-      for (const request of expiredRequests) {
-        
-        await this.prisma.accessLog.create({
-          data: {
-            requestId: request.id,
-            userId: request.userId,
-            action: 'EXPIRE',
-            guardId: 'system',
-            timestamp: new Date(),
-          }
+      if (expiredRequests.length > 0) {
+        await this.prisma.accessRequest.updateMany({
+          where: { id: { in: expiredRequests.map(r => r.id) } },
+          data: { status: 'EXPIRED', processedAt: new Date(), processedBy: 'system' }
         });
-        
-        this.logger.log(`Заявка ${request.code} просрочена`);
+
+        for (const request of expiredRequests) {
+          await this.prisma.accessLog.create({
+            data: {
+              requestId: request.id,
+              userId: request.userId,
+              action: 'EXPIRE',
+              guardId: 'system',
+              timestamp: new Date(),
+              deviceInfo: request.deviceId // записываем deviceId заявки
+            }
+          });
+        }
+        this.logger.log(`Помечено ${expiredRequests.length} просроченных заявок`);
       }
       
     } catch (error) {
