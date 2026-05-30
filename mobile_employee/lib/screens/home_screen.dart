@@ -7,6 +7,7 @@ import 'camera_screen.dart';
 import 'profile_screen.dart';
 import '../main.dart';
 import '../models/employee.dart';
+import 'dart:async';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,12 +19,19 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _activeRequests = [];
   bool _isLoading = false;
+  Timer? _timer; 
   String get _deviceId => Employee.deviceId;
 
   @override
   void initState() {
     super.initState();
     _fetchUserRequests();
+
+    // Запускаем таймер на обновление каждые 5 секунд
+    _timer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _fetchUserRequests(),
+    );
   }
 
   // Загрузка заявок сотрудника с бэкенда NestJS
@@ -209,5 +217,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 }

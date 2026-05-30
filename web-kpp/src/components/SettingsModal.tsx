@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sliders, Monitor, ShieldAlert, Clock } from 'lucide-react';
+import { X, Sliders, Clock } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -81,7 +81,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
       <div style={{
         backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
         border: '1px solid ' + (isDarkMode ? '#27272a' : '#e4e4e7'),
-        borderRadius: '24px', width: '100%', maxWidth: '550px',
+        borderRadius: '24px', width: '100%', maxWidth: '600px',
         padding: '32px', position: 'relative',
         color: isDarkMode ? 'white' : '#0f172a',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
@@ -94,24 +94,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
           <X size={24} />
         </button>
 
-        <h2 style={{ fontSize: '24px', marginBottom: '24px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Sliders color="#eab308" /> Настройки КПП
+        <h2 style={{ fontSize: '26px', marginBottom: '28px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Sliders color="#eab308" size={26} /> Настройки КПП
         </h2>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           <div style={{ 
             backgroundColor: isDarkMode ? '#27272a' : '#f4f4f5', 
-            padding: '16px', borderRadius: '16px',
+            padding: '20px', borderRadius: '16px',
             border: '1px solid ' + (isDarkMode ? 'transparent' : '#e4e4e7')
           }}>
-            <div style={{ fontWeight: '600', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Clock size={16} color="#3b82f6" /> Настройки рабочего дня
+            <div style={{ fontWeight: '600', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px' }}>
+              <Clock size={18} color="#3b82f6" /> Настройки рабочего дня
             </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
               <div>
-                <label style={{ fontSize: '13px', color: isDarkMode ? '#a3a3a3' : '#64748b', display: 'block', marginBottom: '6px' }}>
+                <label style={{ fontSize: '14px', color: isDarkMode ? '#a3a3a3' : '#64748b', display: 'block', marginBottom: '8px', fontWeight: '500' }}>
                   Начало смены
                 </label>
                 <input 
@@ -120,18 +120,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
                   onChange={(e) => setWorkStart(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '10px',
-                    borderRadius: '8px',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
                     backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
                     color: isDarkMode ? 'white' : '#0f172a',
                     border: '1px solid ' + (isDarkMode ? '#3f3f46' : '#e4e4e7'),
-                    fontSize: '14px',
+                    fontSize: '15px',
                     outline: 'none'
                   }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '13px', color: isDarkMode ? '#a3a3a3' : '#64748b', display: 'block', marginBottom: '6px' }}>
+                <label style={{ fontSize: '14px', color: isDarkMode ? '#a3a3a3' : '#64748b', display: 'block', marginBottom: '8px', fontWeight: '500' }}>
                   Конец смены
                 </label>
                 <input 
@@ -140,12 +140,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
                   onChange={(e) => setWorkEnd(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '10px',
-                    borderRadius: '8px',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
                     backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
                     color: isDarkMode ? 'white' : '#0f172a',
                     border: '1px solid ' + (isDarkMode ? '#3f3f46' : '#e4e4e7'),
-                    fontSize: '14px',
+                    fontSize: '15px',
                     outline: 'none'
                   }}
                 />
@@ -153,7 +153,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
             </div>
 
             <div>
-              <label style={{ fontSize: '13px', color: isDarkMode ? '#a3a3a3' : '#64748b', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '14px', color: isDarkMode ? '#a3a3a3' : '#64748b', display: 'block', marginBottom: '8px', fontWeight: '500' }}>
                 Считать заявку просроченной через (часов):
               </label>
               <input 
@@ -165,63 +165,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
                 step="1"
                 style={{
                   width: '100%',
-                  padding: '10px',
-                  borderRadius: '8px',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
                   backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
                   color: isDarkMode ? 'white' : '#0f172a',
                   border: '1px solid ' + (isDarkMode ? '#3f3f46' : '#e4e4e7'),
-                  fontSize: '14px',
-                  outline: 'none'
+                  fontSize: '15px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
               />
-              <p style={{ fontSize: '11px', color: isDarkMode ? '#71717a' : '#9ca3af', marginTop: '6px' }}>
+              <p style={{ fontSize: '12px', color: isDarkMode ? '#71717a' : '#9ca3af', marginTop: '8px' }}>
                 Если заявка не обработана в течение указанного времени, она автоматически становится просроченной
               </p>
             </div>
           </div>
 
-          <div style={{ 
-            backgroundColor: isDarkMode ? '#27272a' : '#f4f4f5', 
-            padding: '16px', borderRadius: '16px',
-            border: '1px solid ' + (isDarkMode ? 'transparent' : '#e4e4e7')
-          }}>
-            <div style={{ fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Monitor size={16} color="#3b82f6" /> Режим видоискателя
-            </div>
-            <p style={{ fontSize: '13px', color: isDarkMode ? '#a3a3a3' : '#64748b', marginBottom: '12px' }}>
-              Определяет тип кадрирования поступающей биометрии с мобильных устройств сотрудников.
-            </p>
-            <select style={{
-              width: '100%', padding: '10px', borderRadius: '8px',
-              backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
-              color: isDarkMode ? 'white' : '#0f172a',
-              border: '1px solid ' + (isDarkMode ? '#3f3f46' : '#e4e4e7'),
-              fontSize: '14px', outline: 'none'
-            }}>
-              <option>Пропорции 3х4 (Строгий Кроп биометрии)</option>
-              <option>Полноэкранный режим (Оригинал матрицы)</option>
-            </select>
-          </div>
-
-          <div style={{ 
-            backgroundColor: isDarkMode ? '#27272a' : '#f4f4f5', 
-            padding: '16px', borderRadius: '16px',
-            border: '1px solid ' + (isDarkMode ? 'transparent' : '#e4e4e7')
-          }}>
-            <div style={{ fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px', color: '#f43f5e' }}>
-              <ShieldAlert size={16} /> Логирование инцидентов
-            </div>
-            <p style={{ fontSize: '13px', color: isDarkMode ? '#a3a3a3' : '#64748b', marginBottom: '12px' }}>
-              Автоматически создавать тревожный тикет в accessLog при нажатии кнопки Задержать.
-            </p>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '14px' }}>
-              <input type="checkbox" defaultChecked style={{ width: '16px', height: '16px', accentColor: '#f43f5e' }} />
-              Включено (Рекомендуется для протокола АБ)
-            </label>
-          </div>
-
           {saveError && (
-            <div style={{ color: '#ef4444', fontSize: '14px', textAlign: 'center', padding: '8px', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}>
+            <div style={{ color: '#ef4444', fontSize: '14px', textAlign: 'center', padding: '10px', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: '10px' }}>
               {saveError}
             </div>
           )}
@@ -230,12 +191,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
             onClick={handleSave}
             disabled={loading}
             style={{
-              padding: '14px',
+              padding: '16px',
               backgroundColor: '#3b82f6',
               color: 'white',
               border: 'none',
-              borderRadius: '12px',
-              fontSize: '16px',
+              borderRadius: '14px',
+              fontSize: '17px',
               fontWeight: 'bold',
               cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.6 : 1

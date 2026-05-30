@@ -45,6 +45,11 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
   const [logsEndDate, setLogsEndDate] = useState<string>('');
   const [workStart, setWorkStart] = useState('08:00');
   const [workEnd, setWorkEnd] = useState('20:00');
+  
+  // State для модалки комментария
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
 
   // Загрузка активных заявок с бэкенда NestJS
   const fetchRequests = async () => {
@@ -152,8 +157,8 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
     };
   }, [workStart, workEnd]); // Перезапускаем при изменении настроек
 
-  // Кнопка "Пропустить"
-  const handlePass = async (id: string, name: string) => {
+  // Кнопка "Пропустить" - без комментария
+  const handlePass = async (id: string) => {
     try {
       const response = await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
         method: 'POST',
@@ -168,15 +173,35 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
     }
   };
 
-  // Кнопка "Задержать"
-  const handleReject = async (id: string, name: string) => {
+  // Открыть модалку для комментария при задержке
+  const handleRejectClick = (id: string) => {
+    setCurrentRequestId(id);
+    setCommentText('');
+    setShowCommentModal(true);
+  };
+
+  // Отправить задержку с комментарием
+  const handleRejectWithComment = async () => {
+    if (!currentRequestId) return;
+    
+    if (!commentText.trim()) {
+      alert('Пожалуйста, укажите причину задержки');
+      return;
+    }
+    
     try {
-      const response = await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
+      const response = await fetch(`http://localhost:3000/api/access-request/process/${currentRequestId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'REJECT' }),
+        body: JSON.stringify({ 
+          action: 'REJECT',
+          comment: commentText.trim()
+        }),
       });
       if (response.ok) {
+        setShowCommentModal(false);
+        setCurrentRequestId(null);
+        setCommentText('');
         fetchRequests();
       }
     } catch (error) {
@@ -349,7 +374,6 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
                 border: '1px solid ' + (isDarkMode ? '#10b981' : '#a7f3d0'),
                 boxShadow: isDarkMode ? 'none' : '0 4px 6px -1px rgba(0,0,0,0.05)'
               }}>
-                {/* ... содержимое карточки ... */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                   <div>
                     <div style={{ fontSize: '32px', fontFamily: 'monospace', color: '#10b981' }}>{req.code}</div>
@@ -396,11 +420,11 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <button onClick={() => handlePass(req.id, req.user?.fullName || req.fullName || 'Сотрудник')} 
+                  <button onClick={() => handlePass(req.id)} 
                     style={{ backgroundColor: '#10b981', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
                     <CheckCircle size={20} /> Пропустить
                   </button>
-                  <button onClick={() => handleReject(req.id, req.user?.fullName || req.fullName || 'Сотрудник')} 
+                  <button onClick={() => handleRejectClick(req.id)} 
                     style={{ backgroundColor: '#f43f5e', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
                     <XCircle size={20} /> Задержать
                   </button>
@@ -423,7 +447,6 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
                 border: '1px solid ' + (isDarkMode ? '#f59e0b' : '#fde68a'),
                 boxShadow: isDarkMode ? 'none' : '0 4px 6px -1px rgba(0,0,0,0.05)'
               }}>
-                {/* ... содержимое карточки ... */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                   <div>
                     <div style={{ fontSize: '32px', fontFamily: 'monospace', color: '#f59e0b' }}>{req.code}</div>
@@ -438,14 +461,14 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
                     {req.status === 'ENTERED_WITHOUT_EXIT' && (
                       <span style={{
                         display: 'inline-block',
-                        padding: '4px 10px',
+                        padding: '6px 12px',
                         borderRadius: '6px',
-                        fontSize: '12px',
+                        fontSize: '13px',
                         fontWeight: 'bold',
                         backgroundColor: 'rgba(139, 92, 246, 0.15)',
                         color: '#a855f7'
                       }}>
-                        ⚠️ Вошёл без выхода
+                        Вошёл без выхода
                       </span>
                     )}
                   </div>
@@ -485,11 +508,11 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <button onClick={() => handlePass(req.id, req.user?.fullName || req.fullName || 'Сотрудник')} 
+                  <button onClick={() => handlePass(req.id)} 
                     style={{ backgroundColor: '#f59e0b', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
                     <CheckCircle size={20} /> Пропустить
                   </button>
-                  <button onClick={() => handleReject(req.id, req.user?.fullName || req.fullName || 'Сотрудник')} 
+                  <button onClick={() => handleRejectClick(req.id)} 
                     style={{ backgroundColor: '#f43f5e', color: 'white', padding: '16px', borderRadius: '16px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: 'none', cursor: 'pointer', fontWeight: 500 }}>
                     <XCircle size={20} /> Задержать
                   </button>
@@ -499,6 +522,85 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
           </div>
         </div>
       </main>
+
+      {/* Модалка комментария для задержки */}
+      {showCommentModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 200,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
+            border: '1px solid ' + (isDarkMode ? '#27272a' : '#e4e4e7'),
+            borderRadius: '20px', width: '450px',
+            padding: '28px', position: 'relative',
+            color: isDarkMode ? 'white' : '#0f172a'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '20px' }}>Причина задержки</h3>
+            
+            <textarea
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              rows={4}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '12px',
+                backgroundColor: isDarkMode ? '#27272a' : '#f4f4f5',
+                color: isDarkMode ? 'white' : '#0f172a',
+                border: '1px solid ' + (isDarkMode ? '#3f3f46' : '#e4e4e7'),
+                fontSize: '14px',
+                resize: 'vertical',
+                outline: 'none',
+                fontFamily: 'inherit',
+                boxSizing: 'border-box'
+              }}
+              autoFocus
+            />
+            
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button
+                onClick={() => {
+                  setShowCommentModal(false);
+                  setCurrentRequestId(null);
+                  setCommentText('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '12px',
+                  backgroundColor: isDarkMode ? '#27272a' : '#f1f5f9',
+                  color: isDarkMode ? 'white' : '#0f172a',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '15px',
+                  fontWeight: '500'
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleRejectWithComment}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '12px',
+                  backgroundColor: '#f43f5e',
+                  color: 'white',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '15px',
+                  fontWeight: '500'
+                }}
+              >
+                Подтвердить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модальные окна */}
       {showSettings && (

@@ -91,6 +91,7 @@ model AccessLog {
   timestamp DateTime   @default(now())
   ip        String?
   deviceInfo String?
+  comment    String?
 
   @@map("access_logs")
 }

@@ -107,7 +107,7 @@ export class AccessRequestService {
     });
   }
 
-  async processRequest(id: string, action: 'APPROVE' | 'REJECT') {
+  async processRequest(id: string, action: 'APPROVE' | 'REJECT', comment?: string) {
     const status = action === 'APPROVE' ? RequestStatus.APPROVED : RequestStatus.REJECTED;
 
     const currentRequest = await this.prisma.accessRequest.findUnique({
@@ -137,6 +137,8 @@ export class AccessRequestService {
           action: 'INCIDENT',
           guardId: 'admin',
           timestamp: new Date(),
+          deviceInfo: currentRequest.deviceId,
+          comment: comment || null,  // ← Добавить комментарий
         }
       });
 
@@ -176,6 +178,8 @@ export class AccessRequestService {
         action: action === 'APPROVE' ? 'PASS' : 'REJECT',
         guardId: 'admin',
         timestamp: new Date(),
+        deviceInfo: currentRequest.deviceId,
+        comment: action === 'REJECT' ? (comment || null) : null,  // ← Только для REJECT
       },
     });
 
@@ -254,6 +258,17 @@ export class AccessRequestService {
     ]);
 
     this.logger.log(`Создано 2 заявки с кодом ${code} для пользователя ${user.fullName}`);
+
+    await this.prisma.accessLog.create({
+      data: {
+        requestId: requestIn.id,
+        userId: user.id,
+        action: 'CREATE_REQUEST',
+        guardId: null,
+        timestamp: new Date(),
+        deviceInfo: dto.deviceId,
+      },
+    });
 
     return {
       success: true,
