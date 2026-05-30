@@ -18,7 +18,7 @@ function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:3000/api/guard/login', {
+      const res = await axios.post('http://10.75.148.69:3000/api/guard/login', {
         username,
         password,
       });

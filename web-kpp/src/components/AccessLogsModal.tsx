@@ -88,7 +88,7 @@ export const AccessLogsModal: React.FC<AccessLogsModalProps> = ({
     if (isOpen) {
       setLoading(true);
       setError(null);
-      fetch('http://localhost:3000/api/access-logs')
+      fetch('http://10.75.148.69:3000/api/access-logs')
         .then(res => {
           if (!res.ok) throw new Error(`Status: ${res.status}`);
           return res.json();

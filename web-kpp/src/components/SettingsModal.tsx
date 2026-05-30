@@ -17,7 +17,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
 
   useEffect(() => {
     if (isOpen) {
-      fetch('http://localhost:3000/api/settings/schedule')
+      fetch('http://10.75.148.69:3000/api/settings/schedule')
         .then(res => {
           if (!res.ok) throw new Error('Ошибка загрузки');
           return res.json();
@@ -40,7 +40,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isDarkMo
     setSaveError(null);
     try {
       const today = new Date().getDay();
-      const response = await fetch(`http://localhost:3000/api/settings/schedule`, {
+      const response = await fetch(`http://10.75.148.69:3000/api/settings/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

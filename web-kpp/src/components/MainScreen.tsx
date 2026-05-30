@@ -54,7 +54,7 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
   // Загрузка активных заявок с бэкенда NestJS
   const fetchRequests = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/access-request/active');
+      const response = await fetch('http://10.75.148.69:3000/api/access-request/active');
       if (response.ok) {
         const data = await response.json();
         setRequests(data);
@@ -66,7 +66,7 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
 
   const loadSettings = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/settings/schedule');
+      const response = await fetch('http://10.75.148.69:3000/api/settings/schedule');
       if (response.ok) {
         const data = await response.json();
         if (data) {
@@ -160,7 +160,7 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
   // Кнопка "Пропустить" - без комментария
   const handlePass = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/access-request/process/${id}`, {
+      const response = await fetch(`http://10.75.148.69:3000/api/access-request/process/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'APPROVE' }),
@@ -190,7 +190,7 @@ const MainScreen: React.FC<MainScreenProps> = ({ onLogout }) => {
     }
     
     try {
-      const response = await fetch(`http://localhost:3000/api/access-request/process/${currentRequestId}`, {
+      const response = await fetch(`http://10.75.148.69:3000/api/access-request/process/${currentRequestId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

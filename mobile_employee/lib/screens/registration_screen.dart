@@ -75,7 +75,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     print('📡 Отправляем запрос...');
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:3000/api/users/check-employee'),
+        Uri.parse('http://10.75.148.69:3000/api/users/check-employee'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'fullName': _fullNameController.text.trim(),
@@ -98,7 +98,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           
           // Проверяем, привязано ли это устройство к пользователю
           final deviceCheckResponse = await http.post(
-            Uri.parse('http://localhost:3000/api/users/check-device'),
+            Uri.parse('http://10.75.148.69:3000/api/users/check-device'),
             headers: {'Content-Type': 'application/json'},
             body: json.encode({'deviceId': deviceId}),
           );
@@ -205,7 +205,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final passportToUse = _cachedPassportNumber ?? _passportController.text.trim();
       
       final response = await http.post(
-        Uri.parse('http://localhost:3000/api/users/set-password'),
+        Uri.parse('http://10.75.148.69:3000/api/users/set-password'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'passportNumber': passportToUse,

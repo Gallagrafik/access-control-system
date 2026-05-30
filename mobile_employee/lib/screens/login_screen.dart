@@ -77,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       print('📡 Проверяем устройство на сервере: $deviceId');
       final response = await http.post(
-        Uri.parse('http://localhost:3000/api/users/check-device'),
+        Uri.parse('http://10.75.148.69:3000/api/users/check-device'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'deviceId': deviceId}),
       );
@@ -96,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // Проверяем, есть ли пароль у пользователя
           // Делаем дополнительный запрос для проверки пароля
           final checkUserResponse = await http.post(
-            Uri.parse('http://localhost:3000/api/users/check-employee'),
+            Uri.parse('http://10.75.148.69:3000/api/users/check-employee'),
             headers: {'Content-Type': 'application/json'},
             body: json.encode({
               'fullName': _cachedUser!.fullName,
@@ -175,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       
       final response = await http.post(
-        Uri.parse('http://localhost:3000/api/users/login'),
+        Uri.parse('http://10.75.148.69:3000/api/users/login'),
         headers: {'Content-Type': 'application/json'},
         body: requestBody,
       );
